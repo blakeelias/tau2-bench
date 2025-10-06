@@ -216,6 +216,17 @@ def main():
     )
     evaluate_parser.set_defaults(func=lambda args: run_evaluate_trajectories(args))
 
+    # Analyze failures command
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="Analyze simulation failures and action patterns"
+    )
+    analyze_parser.add_argument(
+        "paths",
+        nargs="+",
+        help="Paths to trajectory files, directories, or glob patterns",
+    )
+    analyze_parser.set_defaults(func=lambda args: run_analyze_failures(args))
+
     # Submit command with subcommands
     submit_parser = subparsers.add_parser(
         "submit", help="Submission management for the leaderboard"
@@ -357,6 +368,19 @@ def run_validate_submission(args):
     from tau2.scripts.leaderboard.prepare_submission import validate_submission
 
     validate_submission(submission_dir=args.submission_dir, mode=args.mode)
+
+
+def run_analyze_failures(args):
+    """Run the analyze failures command."""
+    import sys
+
+    from loguru import logger
+
+    from tau2.scripts.analyze_failures import analyze_failures
+
+    logger.configure(handlers=[{"sink": sys.stderr, "level": "ERROR"}])
+
+    analyze_failures(args.paths)
 
 
 if __name__ == "__main__":
