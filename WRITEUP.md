@@ -112,9 +112,6 @@ Grok does well overall at understanding the user's request and intent, and takin
 However, Grok at times will fail to follow through perfectly on certain details of the request. Grok-4-fast-reasoning struggles with knowing how strongly to follow the policy constraints. In [Example 3](#example-3--fails-to-calculate-using-tool), it did a calculation in its head (correctly!) rather than following the policy of using a calculator tool for all calculations. In [Example 2](#example-2--overly-pessimistic), it exited prematurely when a user's request could not be satisfied due to a policy violation, rather than telling this to the user and seeing if there was anything else it could do. Some failures, however, are even worse, e.g. [Example 1](#example-1-charged-user-wrong-amount) shows that the agent booked an entirely wrong flight for the user that was way outside their budget, even after having agreed.
 
 
- [ ] Assess where Grok succeeds / fails
- [ ] Understand what multiple trials do, if temperature is set to 0.
-
 ## Benchmark Critique
 
 $\Tau$-bench is set up such that there is only one correct action sequence that the agent should take. However, in realistic scenarios, it is okay not to get the perfect sequence every single time; other states can also be acceptable, and just get a "lower grade" reward.
@@ -132,7 +129,7 @@ what they might do next if doing the task entirely by hand.
 
 ### New Test Cases or Scenarios
 
-The existing airline benchmark does not distinguish between a policy violation versus a user simply getting a suboptimal outcome (i.e. not their preferred one). We extend the benchmark by allowing users to be flexible and accept multiple possible outcomes, where several possible outcomes can be graded as a 'pass' outcome, but where each outcome has a different reward amount. Whereas other failures like policy violations, or not getting into the acceptable set at all, count as failures. This incentivizes the agent not just to find any outcome which the user will agree to, but to be more proactive at finding the best outcome and truly delight the user, e.g. via strategies like offering the user multiple plausible options and asking which one they find best.
+The existing airline benchmark does not distinguish between a policy violation versus a user simply getting a suboptimal outcome (i.e. not their preferred one). We extend the benchmark by allowing users to be flexible and accept multiple possible outcomes, where several possible outcomes can be graded as a 'pass' outcome, but where each outcome has a different reward amount. Whereas other failures like policy violations, or not getting into the acceptable set at all, count as failures. This incentivizes the agent not just to find any outcome which the user will agree to, but to be more proactive at finding the best outcome and truly delight the user, e.g. via strategies like offering the user multiple plausible options and asking which one they find best. It is worth noting that any move to a scalar reward like this prevents measuring `pass@k` or `pass^k` metrics in the same way. Instead, the reliability could perhaps be converted to the arithmetic mean (or geometric mean) of the rewards over each trial.
 
 
 As an example of such a relaxation, we show a relaxation of Task 8. The task originally had the following structure:
@@ -197,42 +194,14 @@ Here we augment the task by lowering the budget from $500 to $300. Now, there is
 
 We also modify the user's prompt to give them a clear ranked preference over these outcomes if given the choice, but willing to accept any of them if it's the only one the agent offers:
 
-"You want to book the exact same flight as your recent May 10 flight from ORD to PHL.\n\nYou do not want any other flight. \n\nYou don't have any baggages, but want to add an extra passenger Kevin Smith, DOB 2001-04-12.\n\nYou prefer economy class and want aisle and a middle seat together. Your preferred budget is up to $300 total for the purchase.\n\n**If the agent presents multiple options**, choose the one that best balances staying within budget while traveling with your companion. You're willing to downgrade to basic economy if it means staying within budget and traveling together.\n\nIf economy for 2 passengers is over budget **and the agent doesn't suggest basic economy**, you're willing to either: (a) pay the extra to travel together in economy, or (b) drop the second passenger and book solo in economy to stay within budget.\n\nIf the agent asks, you only want a one-way ticket, not roundtrip.\n\nYou don't need any travel insurance.\n\nYou want to pay using only one of your certificates.\n\nYou do not accept any other mode of payment. \n\nYour birthday is in your user profile so you prefer not to provide it."
+> "You want to book the exact same flight as your recent May 10 flight from ORD to PHL.\n\nYou do not want any other flight. \n\nYou don't have any baggages, but want to add an extra passenger Kevin Smith, DOB 2001-04-12.\n\nYou prefer economy class and want aisle and a middle seat together. Your preferred budget is up to $300 total for the purchase.\n\n**If the agent presents multiple options**, choose the one that best balances staying within budget while traveling with your companion. You're willing to downgrade to basic economy if it means staying within budget and traveling together.\n\nIf economy for 2 passengers is over budget **and the agent doesn't suggest basic economy**, you're willing to either: (a) pay the extra to travel together in economy, or (b) drop the second passenger and book solo in economy to stay within budget.\n\nIf the agent asks, you only want a one-way ticket, not roundtrip.\n\nYou don't need any travel insurance.\n\nYou want to pay using only one of your certificates.\n\nYou do not accept any other mode of payment. \n\nYour birthday is in your user profile so you prefer not to provide it."
 
 
-TO-DO:
-
- [ ] Understand how database is structured, how actions are recorded, how states are checked
-
- [ ] Construct vague / ill-specified preferences, which nonetheless, upon checking the available results in the database, only have one clear, valid database state that's compatible with the preferences. This database state must be reached.
-
-  * Modify database to have specific constraints / limited available flights that constrain the scope of what's possible to satisfy user's request
-  
-  * Satisfying user's exact request may not be possible. Yet it may be that user would accept something close enough, if the agent finds it and asks.
-    - Have hidden preference for this
-    - Create the true database state that's desired
-    - Create the initial request that seems to point to a certain set of possible database states
-    - Create a ranked list of database states in the order that the user desires them
-    - OR: create a utility function over database states, in terms of:
-      - departure time of day
-      - arrival time of day
-      - duration of trip
-      - day leaving
-      - (change in) ticket cost
-      - time spent on phone with agent
-
- * Different amounts of trust could be placed. E.g. large set of acceptable solutions vs. small set. If large set, should agent just pick one? Is user in a rush? Or should agent explore with the user which solution is most preferred? Should it establish which solutions are on the Pareto-frontier and just expose those?
-
-   * Allow database to be in one of several valid states?
-     - They avoid doing this because they don't want ambiguity in the evaluation.
-     - However, I think we can allow multiple valid outputs, and just have an ordering or different levels of reward for each one.
-
- * Require tool-calls for user to check their calendar etc.?
-
- * Compare grok-3 vs. grok-4 performance.
+We create multiple acceptable options by creating a [new `tasks.json` file](#arline-relaxed-json) that lists multiple options and their corresponding rewards.
 
 
-* Better Methodology:  ??
+
+#### Better Methodology
 
 
 "I propose extending τ²-bench into what could be called τ²-A: Human-in-the-Loop Ambiguity Evaluation. Whereas τ² assumes both participants share a fully specified goal and the challenge lies in coordinating tool use, τ²-A introduces structured uncertainty about the human’s intent. The AI must decide when to act autonomously, when to seek clarification, and how to minimize unnecessary interruptions—balancing efficiency with epistemic humility. Each scenario begins with a partially specified user request, with additional clarifying information available only through explicit “human query” tool calls. Performance is thus measured not only by task success but by how intelligently the agent manages communication: resolving ambiguity with minimal human effort and without premature assumptions. This turns evaluation from a static assessment of execution into a dynamic study of interactive reasoning, testing whether the model can adaptively collaborate with a human partner to uncover and satisfy evolving goals."
@@ -255,15 +224,41 @@ There would be a "ground-truth" execution trace of what the human would do itsel
 
 and subsequently write a prompt for the AI agent containing a condensed version of the desires, intentionally leaving ambiguity for the AI agent to sort out. The human- or machine-provided trace as the "ground-truth" optimal way to execute on that desire (as a proxy for how long it would take a human or LLM to complete the task given full knowledge of preferences ahead-of-time). 
 
+## Benchmark Implementation
 
-* Better Metrics: ??
 
- - Extending $\Tau^2$'s binary success metric to a continuous utility metric balancing correctness, efficiency and communication cost.
 
-   - This prevents measuring `pass@k` or `pass^k` metrics in the same way. Instead, the reliability could just be converted to the arithmetic mean (or geometric mean) of the rewards over each trial.
 
- - Partial credit for doing some of the correct tool-calls or database updates
-   - This too would prevent measuring `pass@k` or `pass^k`
+## Benchmark Results
+
+* Results (evaluated against Grok), quantitative, qualitative
+* Failure Analysis
+  - Model improvements:  fine-tuning strategies, architectural changes, data augmentation
+
+
+## (Bonus): Suggested Training Data
+
+ * Generation
+ * Labeling
+ * Augmentation
+
+
+## Related Work
+
+"Recent research has begun probing AI systems’ ability to recognize and resolve ambiguity rather than simply execute fixed instructions. While $\Tau$ and $\Tau^2$ focus on the combination of dialogue and tool-use, and other existing benchmarks explore clarification of ambiguity in dialogue, $\Tau^2-A$ aims to unify all three such concerns in a single benchmark, testing how well agents can combine dialogue and tool use while in the backdrop of ambiguous user intent.
+
+Benchmarks such as AmbigQA (Min et al., 2020) and ShARC (Saeidi et al., 2018) evaluate whether models can identify under-specified user queries and ask effective clarification questions, while CLAM (Rao and Daumé III, 2018) measures the usefulness of clarifying questions in real human dialogues. More recent efforts like MINT-Bench explore meta-reasoning and uncertainty calibration, asking models to decide when to seek additional information. In parallel, embodied and web-based environments such as ALFWorld and WebArena investigate exploration and tool use under partial observability. Building on these threads, the proposed τ²-A benchmark extends τ²-bench from coordination under complete goal information to collaboration under partial goal information, integrating structured ambiguity and human-in-the-loop clarification to test how efficiently a model learns and satisfies evolving human intent."
+
+
+## Code Instructions
+
+
+## Future Work
+
+### Better Metrics
+
+As future work, I propose further extending the continuous rewards to balancing correctness, efficiency and communication cost. Such a continuous rewards scheme would also allow awarding partial credit for doing some of the correct tool-calls or database updates, though this may obscure the real outcome-driven success we aim to measure.  
+
 
 "Better Metrics
 
@@ -273,7 +268,8 @@ To capture this richer notion of collaboration, I propose replacing τ²’s bin
 
 where 𝑆 represents successful completion or partial credit for progress toward the goal, 𝐻 is the number of human interventions or clarification requests, 𝑇 measures total reasoning or execution time, and 𝐶 quantifies human communication effort (e.g., tokens typed or time spent responding). This metric rewards agents that are both effective and considerate collaborators—achieving high task success while minimizing human cognitive load. Unlike fixed accuracy metrics, this formulation evaluates how well the AI manages uncertainty and partnership dynamics, aligning performance assessment with real-world human preferences for systems that are helpful, efficient, and low-friction to work with."
 
-* Implementation Considerations:
+
+#### Implementation Considerations:
 
 A study with real humans could have humans present realistic requests to an AI agent, provide a time-estimate of how long the task would take them if on their own, and then respond in a timed environment any time the AI agent requests their input.
 
@@ -281,12 +277,8 @@ A study with real humans could have humans present realistic requests to an AI a
 "Implementing the proposed τ²-A benchmark requires capturing realistic human input while maintaining reproducibility. Two complementary approaches can achieve this. First, in simulated-user mode, an auxiliary LLM acts as the human partner, holding a hidden “ground-truth” preference description while revealing only partial information through responses to clarification queries. This enables large-scale, deterministic evaluation of ambiguity resolution. Second, in human-study mode, real users provide authentic requests and clarifications in a timed environment, allowing direct measurement of communication cost and subjective satisfaction. Both modes can share the same infrastructure as τ²—tools, task APIs, and interaction logging—augmented with new tool-calls for requesting clarification and recording response metadata. By keeping the environment modular and extending τ²’s existing protocols, τ²-A remains technically compatible while introducing the crucial dimension of adaptive collaboration, making it feasible for both automated and human-centered evaluation at scale."
 
 
-## Benchmark Implementation
 
-* Benchmark Development:
-  - 10 test cases
-  - code snippet
-    - setup instructions (save to end?)
+### Prompts
 
 Prompt for simulated human agent:
 
@@ -317,28 +309,6 @@ This metric rewards you for being both an effective and considerate collaborator
 The last parapgh of this prompt could optionally be withheld or included and be considered two separate modes of evaluation. This would allow testing whether the AI agent can achieve a higher score if it knows how it's being evaluated. It's also possible that this woludn't make a difference, which could either mean that the LLM is unable to effectively take such feedback into account, _or_ that the LLM already has a good appreciation for how to value its time versus the human's and that these instructions don't help.
 
 
-## Benchmark Results
-
-* Results (evaluated against Grok), quantitative, qualitative
-* Failure Analysis
-  - Model improvements:  fine-tuning strategies, architectural changes, data augmentation
-
-
-## (Bonus): Suggested Training Data
-
- * Generation
- * Labeling
- * Augmentation
-
-
-## Related Work
-
-"Recent research has begun probing AI systems’ ability to recognize and resolve ambiguity rather than simply execute fixed instructions. While $\Tau$ and $\Tau^2$ focus on the combination of dialogue and tool-use, and other existing benchmarks explore clarification of ambiguity in dialogue, $\Tau^2-A$ aims to unify all three such concerns in a single benchmark, testing how well agents can combine dialogue and tool use while in the backdrop of ambiguous user intent.
-
-Benchmarks such as AmbigQA (Min et al., 2020) and ShARC (Saeidi et al., 2018) evaluate whether models can identify under-specified user queries and ask effective clarification questions, while CLAM (Rao and Daumé III, 2018) measures the usefulness of clarifying questions in real human dialogues. More recent efforts like MINT-Bench explore meta-reasoning and uncertainty calibration, asking models to decide when to seek additional information. In parallel, embodied and web-based environments such as ALFWorld and WebArena investigate exploration and tool use under partial observability. Building on these threads, the proposed τ²-A benchmark extends τ²-bench from coordination under complete goal information to collaboration under partial goal information, integrating structured ambiguity and human-in-the-loop clarification to test how efficiently a model learns and satisfies evolving human intent."
-
-
-## Code Instructions
 
 ## Conclusion
 
@@ -379,6 +349,7 @@ In the long-term, there may be a pathway to optimally extracting human preferenc
 
 ### Evaluation Commands
 
+#### Original Task 
 The following commands were run to produce initial data on the models:
 
 ```
@@ -402,6 +373,306 @@ The following commands were run to characterize failures in more detail:
 tau2 analyze data/simulations/2025-10-06T06:29:29.611973_airline_llm_agent_grok-3-mini_user_simulator_grok-3-mini.json
 
 tau2 analyze data/simulations/2025-10-06T06:48:26.256501_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json
+```
+
+
+#### New (Relaxed) Task
+
+
+### Code Snippets
+
+#### Relaxed Task
+
+Below is JSON code showing an example of a "relaxed" task:
+
+```
+[
+    {
+        "id": "8",
+        "description": {
+            "purpose": "Booking with extra passenger and budget constraint - testing agent's ability to proactively find optimal trade-offs between passenger count, cabin class, and budget.",
+            "relevant_policies": null,
+            "notes": "This is a relaxed version of task 8 that accepts multiple acceptable outcomes with different reward values. The user prefers traveling with a companion but has a budget constraint. An excellent agent would proactively present multiple options exploring the trade-off between cabin class and budget."
+        },
+        "user_scenario": {
+            "persona": null,
+            "instructions": {
+                "task_instructions": "You want to book the exact same flight as your recent May 10 flight from ORD to PHL.\n\nYou do not want any other flight. \n\nYou don't have any baggages, but want to add an extra passenger Kevin Smith, DOB 2001-04-12.\n\nYou prefer economy class and want aisle and a middle seat together. Your preferred budget is up to $300 total for the purchase.\n\nIf the agent presents multiple options, choose the one that best balances staying within budget while traveling with your companion. You're willing to downgrade to basic economy if it means staying within budget and traveling together.\n\nIf economy for 2 passengers is over budget and the agent doesn't suggest basic economy, you're willing to either: (a) pay the extra to travel together in economy, or (b) drop the second passenger and book solo in economy to stay within budget.\n\nIf the agent asks, you only want a one-way ticket, not roundtrip.\n\nYou don't need any travel insurance.\n\nYou want to pay using only one of your certificates.\n\nYou do not accept any other mode of payment. \n\nYour birthday is in your user profile so you prefer not to provide it.",
+                "domain": "airline",
+                "reason_for_call": "You want to book a one-way flight from ORD to PHL on May 26.",
+                "known_info": "Your name is Sophia Silva.\n\nYour user id is sophia_silva_7557.",
+                "unknown_info": "You do not know the flight number of your May 10 flight from ORD to PHL"
+            }
+        },
+        "initial_state": null,
+        "evaluation_criteria": {
+            "acceptable_outcomes": [
+                {
+                    "outcome_id": "8_outcome_A",
+                    "description": "Optimal outcome: 2 passengers in basic economy within budget",
+                    "reward": 1.0,
+                    "actions": [
+                        {
+                            "action_id": "8_0",
+                            "name": "get_user_details",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_1",
+                            "name": "get_reservation_details",
+                            "arguments": {
+                                "reservation_id": "WUNA5K"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_2",
+                            "name": "search_direct_flight",
+                            "arguments": {
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "date": "2024-05-26"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_3",
+                            "name": "book_reservation",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557",
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "flight_type": "one_way",
+                                "cabin": "basic_economy",
+                                "flights": [
+                                    {
+                                        "flight_number": "HAT271",
+                                        "date": "2024-05-26"
+                                    }
+                                ],
+                                "passengers": [
+                                    {
+                                        "first_name": "Sophia",
+                                        "last_name": "Silva",
+                                        "dob": "1957-10-05"
+                                    },
+                                    {
+                                        "first_name": "Kevin",
+                                        "last_name": "Smith",
+                                        "dob": "2001-04-12"
+                                    }
+                                ],
+                                "payment_methods": [
+                                    {
+                                        "payment_id": "certificate_8045380",
+                                        "amount": 166
+                                    }
+                                ],
+                                "total_baggages": 0,
+                                "nonfree_baggages": 0,
+                                "insurance": "no"
+                            },
+                            "info": null
+                        }
+                    ],
+                    "communicate_info": [],
+                    "nl_assertions": [
+                        "Agent gets sophia_silva_7557 user details.",
+                        "Agent identifies reservation id as WUNA5K.",
+                        "Agent books one-way flight HAT271, May 26, in basic economy, no travel insurance, no baggage.",
+                        "Passengers on reservation are Kevin Smith DOB 2001-04-12 + Sophia Silva DOB 1957-10-05.",
+                        "Agent uses single certificate for payment.",
+                        "Total cost is $166 (2 passengers × $83 basic economy), within the $300 budget."
+                    ]
+                },
+                {
+                    "outcome_id": "8_outcome_B",
+                    "description": "Good outcome: 2 passengers in economy, over budget but user gets companion in preferred class",
+                    "reward": 0.7,
+                    "actions": [
+                        {
+                            "action_id": "8_0",
+                            "name": "get_user_details",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_1",
+                            "name": "get_reservation_details",
+                            "arguments": {
+                                "reservation_id": "WUNA5K"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_2",
+                            "name": "search_direct_flight",
+                            "arguments": {
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "date": "2024-05-26"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_3",
+                            "name": "book_reservation",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557",
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "flight_type": "one_way",
+                                "cabin": "economy",
+                                "flights": [
+                                    {
+                                        "flight_number": "HAT271",
+                                        "date": "2024-05-26"
+                                    }
+                                ],
+                                "passengers": [
+                                    {
+                                        "first_name": "Sophia",
+                                        "last_name": "Silva",
+                                        "dob": "1957-10-05"
+                                    },
+                                    {
+                                        "first_name": "Kevin",
+                                        "last_name": "Smith",
+                                        "dob": "2001-04-12"
+                                    }
+                                ],
+                                "payment_methods": [
+                                    {
+                                        "payment_id": "certificate_8045380",
+                                        "amount": 348
+                                    }
+                                ],
+                                "total_baggages": 0,
+                                "nonfree_baggages": 0,
+                                "insurance": "no"
+                            },
+                            "info": null
+                        }
+                    ],
+                    "communicate_info": [],
+                    "nl_assertions": [
+                        "Agent gets sophia_silva_7557 user details.",
+                        "Agent identifies reservation id as WUNA5K.",
+                        "Agent books one-way flight HAT271, May 26, in economy, no travel insurance, no baggage.",
+                        "Passengers on reservation are Kevin Smith DOB 2001-04-12 + Sophia Silva DOB 1957-10-05.",
+                        "Agent uses single certificate for payment.",
+                        "Total cost is $348 (2 passengers × $174 economy), which exceeds the $300 budget but user gets companion."
+                    ]
+                },
+                {
+                    "outcome_id": "8_outcome_C",
+                    "description": "Acceptable outcome: 1 passenger in economy, within budget but travels alone",
+                    "reward": 0.5,
+                    "actions": [
+                        {
+                            "action_id": "8_0",
+                            "name": "get_user_details",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_1",
+                            "name": "get_reservation_details",
+                            "arguments": {
+                                "reservation_id": "WUNA5K"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_2",
+                            "name": "search_direct_flight",
+                            "arguments": {
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "date": "2024-05-26"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_3",
+                            "name": "book_reservation",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557",
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "flight_type": "one_way",
+                                "cabin": "economy",
+                                "flights": [
+                                    {
+                                        "flight_number": "HAT271",
+                                        "date": "2024-05-26"
+                                    }
+                                ],
+                                "passengers": [
+                                    {
+                                        "first_name": "Sophia",
+                                        "last_name": "Silva",
+                                        "dob": "1957-10-05"
+                                    }
+                                ],
+                                "payment_methods": [
+                                    {
+                                        "payment_id": "certificate_8045380",
+                                        "amount": 174
+                                    }
+                                ],
+                                "total_baggages": 0,
+                                "nonfree_baggages": 0,
+                                "insurance": "no"
+                            },
+                            "info": null
+                        }
+                    ],
+                    "communicate_info": [],
+                    "nl_assertions": [
+                        "Agent gets sophia_silva_7557 user details.",
+                        "Agent identifies reservation id as WUNA5K.",
+                        "Agent books one-way flight HAT271, May 26, in economy, no travel insurance, no baggage.",
+                        "Passengers on reservation is only Sophia Silva DOB 1957-10-05 (Kevin Smith not included).",
+                        "Agent uses single certificate for payment.",
+                        "Total cost is $174 (1 passenger × $174 economy), within the $300 budget."
+                    ]
+                }
+            ],
+            "failure_conditions": [
+                {
+                    "condition": "policy_violation",
+                    "description": "Agent violates airline policies (e.g., incorrect payment method, wrong flight, doesn't search for the HAT271 flight)"
+                },
+                {
+                    "condition": "wrong_flight",
+                    "description": "Agent books a different flight than HAT271 despite user wanting the exact same flight as May 10"
+                },
+                {
+                    "condition": "no_booking",
+                    "description": "Agent fails to complete any booking"
+                }
+            ],
+            "reward_basis": [
+                "DB",
+                "COMMUNICATE"
+            ]
+        },
+        "annotations": {
+            "relaxed_version": true,
+            "original_task_id": "8",
+            "design_notes": "This relaxed version demonstrates multi-dimensional trade-offs (passengers vs. cabin class vs. budget). Outcome A (reward 1.0) requires the agent to proactively explore basic economy as a way to meet both the companion preference and budget constraint. Outcome B (reward 0.7) shows the user prioritizing the companion over budget. Outcome C (reward 0.5) shows the user prioritizing budget and cabin class over traveling with companion."
+        }
+    }
+]
+
 ```
 
 
