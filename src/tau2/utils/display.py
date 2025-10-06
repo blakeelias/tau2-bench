@@ -141,6 +141,20 @@ class ConsoleDisplay:
         # Evaluation Criteria section
         if task.evaluation_criteria:
             eval_parts = []
+
+            # Show acceptable outcomes if present (relaxed evaluation)
+            if task.evaluation_criteria.acceptable_outcomes:
+                eval_parts.append(
+                    f"[white]Acceptable Outcomes ({len(task.evaluation_criteria.acceptable_outcomes)}):[/]"
+                )
+                for outcome in task.evaluation_criteria.acceptable_outcomes:
+                    eval_parts.append(
+                        f"  [green]• {outcome.outcome_id}[/] (reward={outcome.reward:.2f}): {outcome.description}"
+                    )
+                    eval_parts.append(
+                        f"    Actions: {len(outcome.actions) if outcome.actions else 0}"
+                    )
+
             if task.evaluation_criteria.actions:
                 eval_parts.append(
                     f"[white]Required Actions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.actions], indent=2)}"
@@ -255,11 +269,30 @@ class ConsoleDisplay:
                         f"- {i}: {assertion.nl_assertion} {'✅' if assertion.met else '❌'}\n\t{assertion.justification}\n"
                     )
 
+            # Add matched outcome info if present (for relaxed evaluation)
+            if simulation.reward_info.info and "matched_outcome_id" in simulation.reward_info.info:
+                sim_info.append("\n🎯 Matched Outcome:\n", style="bold green")
+                sim_info.append(
+                    f"  ID: {simulation.reward_info.info['matched_outcome_id']}\n",
+                    style="cyan"
+                )
+                if "matched_outcome_description" in simulation.reward_info.info:
+                    sim_info.append(
+                        f"  Description: {simulation.reward_info.info['matched_outcome_description']}\n",
+                        style="cyan"
+                    )
+
             # Add additional info if present
             if simulation.reward_info.info:
-                sim_info.append("\nAdditional Info:\n", style="bold magenta")
-                for key, value in simulation.reward_info.info.items():
-                    sim_info.append(f"{key}: {value}\n")
+                # Filter out matched_outcome fields since we displayed them above
+                other_info = {
+                    k: v for k, v in simulation.reward_info.info.items()
+                    if k not in ["matched_outcome_id", "matched_outcome_description"]
+                }
+                if other_info:
+                    sim_info.append("\nAdditional Info:\n", style="bold magenta")
+                    for key, value in other_info.items():
+                        sim_info.append(f"{key}: {value}\n")
 
         cls.console.print(
             Panel(sim_info, title="Simulation Overview", border_style="blue")
@@ -440,11 +473,24 @@ class MarkdownDisplay:
                         f"- {i}: {assertion.nl_assertion} {'✅' if assertion.met else '❌'} {assertion.justification}"
                     )
 
+            # Add matched outcome info if present (for relaxed evaluation)
+            if sim.reward_info.info and "matched_outcome_id" in sim.reward_info.info:
+                output.append("\n**🎯 Matched Outcome**")
+                output.append(f"- ID: {sim.reward_info.info['matched_outcome_id']}")
+                if "matched_outcome_description" in sim.reward_info.info:
+                    output.append(f"- Description: {sim.reward_info.info['matched_outcome_description']}")
+
             # Add additional info if present
             if sim.reward_info.info:
-                output.append("\n**Additional Info**")
-                for key, value in sim.reward_info.info.items():
-                    output.append(f"- {key}: {value}")
+                # Filter out matched_outcome fields since we displayed them above
+                other_info = {
+                    k: v for k, v in sim.reward_info.info.items()
+                    if k not in ["matched_outcome_id", "matched_outcome_description"]
+                }
+                if other_info:
+                    output.append("\n**Additional Info**")
+                    for key, value in other_info.items():
+                        output.append(f"- {key}: {value}")
 
         # Add messages using the display_message method
         if sim.messages:

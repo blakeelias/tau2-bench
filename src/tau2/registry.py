@@ -11,6 +11,12 @@ from tau2.domains.airline.environment import (
     get_environment as airline_domain_get_environment,
 )
 from tau2.domains.airline.environment import get_tasks as airline_domain_get_tasks
+from tau2.domains.airline_relaxed.environment import (
+    get_environment as airline_relaxed_domain_get_environment,
+)
+from tau2.domains.airline_relaxed.environment import (
+    get_tasks as airline_relaxed_domain_get_tasks,
+)
 from tau2.domains.mock.environment import get_environment as mock_domain_get_environment
 from tau2.domains.mock.environment import get_tasks as mock_domain_get_tasks
 from tau2.domains.retail.environment import (
@@ -181,6 +187,8 @@ try:
     registry.register_tasks(mock_domain_get_tasks, "mock")
     registry.register_domain(airline_domain_get_environment, "airline")
     registry.register_tasks(airline_domain_get_tasks, "airline")
+    registry.register_domain(airline_relaxed_domain_get_environment, "airline_relaxed")
+    registry.register_tasks(airline_relaxed_domain_get_tasks, "airline_relaxed")
     registry.register_domain(retail_domain_get_environment, "retail")
     registry.register_tasks(retail_domain_get_tasks, "retail")
     registry.register_domain(telecom_domain_get_environment_manual_policy, "telecom")
