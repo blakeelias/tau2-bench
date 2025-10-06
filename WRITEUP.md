@@ -137,6 +137,7 @@ The existing airline benchmark does not distinguish between a policy violation v
 
 As an example of such a relaxation, we show a relaxation of Task 8. The task originally had the following structure:
 
+```
 ╭───────────────────────────────────────────── Task Details ──────────────────────────────────────────────╮
 │ ID: 8                                                                                                   │
 │                                                                                                         │
@@ -173,7 +174,7 @@ As an example of such a relaxation, we show a relaxation of Task 8. The task ori
 │         You do not accept any other mode of payment.                                                    │
 │                                                                                                         │
 │         Your birthday is in your user profile so you prefer not to provide it.                          │
-
+```
 
  "You want to book the exact same flight as your recent May 10 flight from ORD to PHL.\n\nYou do not want any other flight. \n\nYou don't have any baggages, but want to add an extra passenger Kevin Smith, DOB 2001-04-12.\n\nYou are ok with economy and want aisle and a middle seat together. You are willing to pay up to $500 for the purchase.\n\nIf and only if the price is above $500, drop the second passenger and book only for yourself.\n\nIf the agent asks, you only want a one-way ticket, not roundtrip.\n\nYou don't need any travel insurance.\n\nYou want to pay using only one of your certificates.\n\nYou do not accept any other mode of payment. \n\nYour birthday is in your user profile so you prefer not to provide it."
 
