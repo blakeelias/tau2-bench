@@ -275,8 +275,20 @@ class EvaluationCriteria(BaseModel):
         ),
     ]
 
+    acceptable_outcomes: Annotated[
+        Optional[list["AcceptableOutcome"]],
+        Field(
+            description="List of acceptable outcomes for relaxed evaluation. If provided, the evaluator will check all outcomes and return the maximum reward achieved.",
+            default=None,
+        ),
+    ]
+
     def __str__(self) -> str:
         lines = []
+        if self.acceptable_outcomes is not None:
+            lines.append(f"Acceptable Outcomes ({len(self.acceptable_outcomes)}):")
+            for outcome in self.acceptable_outcomes:
+                lines.append(textwrap.indent(f"- {outcome.outcome_id} (reward={outcome.reward}): {outcome.description}", "\t"))
         if self.actions is not None:
             lines.append("Actions:")
             lines.extend(
@@ -325,6 +337,29 @@ class EvaluationCriteria(BaseModel):
             "num_env_assertions": num_env_assertions,
             "num_nl_assertions": num_nl_assertions,
         }
+
+
+class AcceptableOutcome(EvaluationCriteria):
+    """
+    An acceptable outcome for a task. This is an extension of EvaluationCriteria, just with
+    an additional scalar `reward` field to indicate the (non-binary) reward for achieving this outcome.
+    """
+
+    outcome_id: Annotated[str, Field(description="Unique identifier for this outcome.")]
+
+    description: Annotated[
+        str,
+        Field(description="Human-readable description of this outcome."),
+    ]
+
+    reward: Annotated[
+        float,
+        Field(
+            description="The reward for achieving this outcome (0.0 to 1.0).",
+            ge=0.0,
+            le=1.0,
+        )
+    ]
 
 
 class InitializationData(BaseModel):
