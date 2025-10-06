@@ -1,0 +1,286 @@
+[
+    {
+        "id": "8",
+        "description": {
+            "purpose": "Booking with extra passenger and budget constraint - testing agent's ability to proactively find optimal trade-offs between passenger count, cabin class, and budget.",
+            "relevant_policies": null,
+            "notes": "This is a relaxed version of task 8 that accepts multiple acceptable outcomes with different reward values. The user prefers traveling with a companion but has a budget constraint. An excellent agent would proactively present multiple options exploring the trade-off between cabin class and budget."
+        },
+        "user_scenario": {
+            "persona": null,
+            "instructions": {
+                "task_instructions": "You want to book the exact same flight as your recent May 10 flight from ORD to PHL.\n\nYou do not want any other flight. \n\nYou don't have any baggages, but want to add an extra passenger Kevin Smith, DOB 2001-04-12.\n\nYou prefer economy class and want aisle and a middle seat together. Your preferred budget is up to $300 total for the purchase.\n\nIf the agent presents multiple options, choose the one that best balances staying within budget while traveling with your companion. You're willing to downgrade to basic economy if it means staying within budget and traveling together.\n\nIf economy for 2 passengers is over budget and the agent doesn't suggest basic economy, you're willing to either: (a) pay the extra to travel together in economy, or (b) drop the second passenger and book solo in economy to stay within budget.\n\nIf the agent asks, you only want a one-way ticket, not roundtrip.\n\nYou don't need any travel insurance.\n\nYou want to pay using only one of your certificates.\n\nYou do not accept any other mode of payment. \n\nYour birthday is in your user profile so you prefer not to provide it.",
+                "domain": "airline",
+                "reason_for_call": "You want to book a one-way flight from ORD to PHL on May 26.",
+                "known_info": "Your name is Sophia Silva.\n\nYour user id is sophia_silva_7557.",
+                "unknown_info": "You do not know the flight number of your May 10 flight from ORD to PHL"
+            }
+        },
+        "initial_state": null,
+        "evaluation_criteria": {
+            "acceptable_outcomes": [
+                {
+                    "outcome_id": "8_outcome_A",
+                    "description": "Optimal outcome: 2 passengers in basic economy within budget",
+                    "reward": 1.0,
+                    "actions": [
+                        {
+                            "action_id": "8_0",
+                            "name": "get_user_details",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_1",
+                            "name": "get_reservation_details",
+                            "arguments": {
+                                "reservation_id": "WUNA5K"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_2",
+                            "name": "search_direct_flight",
+                            "arguments": {
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "date": "2024-05-26"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_3",
+                            "name": "book_reservation",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557",
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "flight_type": "one_way",
+                                "cabin": "basic_economy",
+                                "flights": [
+                                    {
+                                        "flight_number": "HAT271",
+                                        "date": "2024-05-26"
+                                    }
+                                ],
+                                "passengers": [
+                                    {
+                                        "first_name": "Sophia",
+                                        "last_name": "Silva",
+                                        "dob": "1957-10-05"
+                                    },
+                                    {
+                                        "first_name": "Kevin",
+                                        "last_name": "Smith",
+                                        "dob": "2001-04-12"
+                                    }
+                                ],
+                                "payment_methods": [
+                                    {
+                                        "payment_id": "certificate_8045380",
+                                        "amount": 166
+                                    }
+                                ],
+                                "total_baggages": 0,
+                                "nonfree_baggages": 0,
+                                "insurance": "no"
+                            },
+                            "info": null
+                        }
+                    ],
+                    "communicate_info": [],
+                    "nl_assertions": [
+                        "Agent gets sophia_silva_7557 user details.",
+                        "Agent identifies reservation id as WUNA5K.",
+                        "Agent books one-way flight HAT271, May 26, in basic economy, no travel insurance, no baggage.",
+                        "Passengers on reservation are Kevin Smith DOB 2001-04-12 + Sophia Silva DOB 1957-10-05.",
+                        "Agent uses single certificate for payment.",
+                        "Total cost is $166 (2 passengers × $83 basic economy), within the $300 budget."
+                    ]
+                },
+                {
+                    "outcome_id": "8_outcome_B",
+                    "description": "Good outcome: 2 passengers in economy, over budget but user gets companion in preferred class",
+                    "reward": 0.7,
+                    "actions": [
+                        {
+                            "action_id": "8_0",
+                            "name": "get_user_details",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_1",
+                            "name": "get_reservation_details",
+                            "arguments": {
+                                "reservation_id": "WUNA5K"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_2",
+                            "name": "search_direct_flight",
+                            "arguments": {
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "date": "2024-05-26"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_3",
+                            "name": "book_reservation",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557",
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "flight_type": "one_way",
+                                "cabin": "economy",
+                                "flights": [
+                                    {
+                                        "flight_number": "HAT271",
+                                        "date": "2024-05-26"
+                                    }
+                                ],
+                                "passengers": [
+                                    {
+                                        "first_name": "Sophia",
+                                        "last_name": "Silva",
+                                        "dob": "1957-10-05"
+                                    },
+                                    {
+                                        "first_name": "Kevin",
+                                        "last_name": "Smith",
+                                        "dob": "2001-04-12"
+                                    }
+                                ],
+                                "payment_methods": [
+                                    {
+                                        "payment_id": "certificate_8045380",
+                                        "amount": 348
+                                    }
+                                ],
+                                "total_baggages": 0,
+                                "nonfree_baggages": 0,
+                                "insurance": "no"
+                            },
+                            "info": null
+                        }
+                    ],
+                    "communicate_info": [],
+                    "nl_assertions": [
+                        "Agent gets sophia_silva_7557 user details.",
+                        "Agent identifies reservation id as WUNA5K.",
+                        "Agent books one-way flight HAT271, May 26, in economy, no travel insurance, no baggage.",
+                        "Passengers on reservation are Kevin Smith DOB 2001-04-12 + Sophia Silva DOB 1957-10-05.",
+                        "Agent uses single certificate for payment.",
+                        "Total cost is $348 (2 passengers × $174 economy), which exceeds the $300 budget but user gets companion."
+                    ]
+                },
+                {
+                    "outcome_id": "8_outcome_C",
+                    "description": "Acceptable outcome: 1 passenger in economy, within budget but travels alone",
+                    "reward": 0.5,
+                    "actions": [
+                        {
+                            "action_id": "8_0",
+                            "name": "get_user_details",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_1",
+                            "name": "get_reservation_details",
+                            "arguments": {
+                                "reservation_id": "WUNA5K"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_2",
+                            "name": "search_direct_flight",
+                            "arguments": {
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "date": "2024-05-26"
+                            },
+                            "info": null
+                        },
+                        {
+                            "action_id": "8_3",
+                            "name": "book_reservation",
+                            "arguments": {
+                                "user_id": "sophia_silva_7557",
+                                "origin": "ORD",
+                                "destination": "PHL",
+                                "flight_type": "one_way",
+                                "cabin": "economy",
+                                "flights": [
+                                    {
+                                        "flight_number": "HAT271",
+                                        "date": "2024-05-26"
+                                    }
+                                ],
+                                "passengers": [
+                                    {
+                                        "first_name": "Sophia",
+                                        "last_name": "Silva",
+                                        "dob": "1957-10-05"
+                                    }
+                                ],
+                                "payment_methods": [
+                                    {
+                                        "payment_id": "certificate_8045380",
+                                        "amount": 174
+                                    }
+                                ],
+                                "total_baggages": 0,
+                                "nonfree_baggages": 0,
+                                "insurance": "no"
+                            },
+                            "info": null
+                        }
+                    ],
+                    "communicate_info": [],
+                    "nl_assertions": [
+                        "Agent gets sophia_silva_7557 user details.",
+                        "Agent identifies reservation id as WUNA5K.",
+                        "Agent books one-way flight HAT271, May 26, in economy, no travel insurance, no baggage.",
+                        "Passengers on reservation is only Sophia Silva DOB 1957-10-05 (Kevin Smith not included).",
+                        "Agent uses single certificate for payment.",
+                        "Total cost is $174 (1 passenger × $174 economy), within the $300 budget."
+                    ]
+                }
+            ],
+            "failure_conditions": [
+                {
+                    "condition": "policy_violation",
+                    "description": "Agent violates airline policies (e.g., incorrect payment method, wrong flight, doesn't search for the HAT271 flight)"
+                },
+                {
+                    "condition": "wrong_flight",
+                    "description": "Agent books a different flight than HAT271 despite user wanting the exact same flight as May 10"
+                },
+                {
+                    "condition": "no_booking",
+                    "description": "Agent fails to complete any booking"
+                }
+            ],
+            "reward_basis": [
+                "DB",
+                "COMMUNICATE"
+            ]
+        },
+        "annotations": {
+            "relaxed_version": true,
+            "original_task_id": "8",
+            "design_notes": "This relaxed version demonstrates multi-dimensional trade-offs (passengers vs. cabin class vs. budget). Outcome A (reward 1.0) requires the agent to proactively explore basic economy as a way to meet both the companion preference and budget constraint. Outcome B (reward 0.7) shows the user prioritizing the companion over budget. Outcome C (reward 0.5) shows the user prioritizing budget and cabin class over traveling with companion."
+        }
+    }
+]
