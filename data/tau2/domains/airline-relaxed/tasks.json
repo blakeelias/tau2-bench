@@ -264,10 +264,6 @@
                     "description": "Agent violates airline policies (e.g., incorrect payment method, wrong flight, doesn't search for the HAT271 flight)"
                 },
                 {
-                    "condition": "wrong_flight",
-                    "description": "Agent books a different flight than HAT271 despite user wanting the exact same flight as May 10"
-                },
-                {
                     "condition": "no_booking",
                     "description": "Agent fails to complete any booking"
                 }
