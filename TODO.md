@@ -157,7 +157,87 @@ While these trials do pass, it's a bit of an abrupt experience for the user. Mor
 
 > You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. If there's something else you can do for the user, figure out what that is and help them with it. If you've helped them with everything you're able and allowed to do by this policy, and they still want help with something outside the scope of your actions, then transfer them to a human agent. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON.' to the user.
 
-The above was successful at getting the agent to explain the policy at least once. That said, the user would sometimes ask just one more question, and then immediately get transferred. This still seems less than ideal, as there could still be cases where the user has another need that could have been addressed and might constitute a failure case. To be extra sure there is no such case, I revise the policy to the following:
+The above was successful at getting the agent to explain the policy at least once. That said, the user would sometimes ask just one more question, and then immediately get transferred, like so:
+
+```
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│ assistant │ I'm sorry, Raj, but based on our  │                                   │ 18   │
+│           │ cancellation policy, this economy │                                   │      │
+│           │ reservation (Q69X3R) doesn't      │                                   │      │
+│           │ qualify for cancellation and      │                                   │      │
+│           │ refund at this time. Here's why:  │                                   │      │
+│           │                                   │                                   │      │
+│           │ - It wasn't booked within the     │                                   │      │
+│           │ last 24 hours (it was created on  │                                   │      │
+│           │ May 14 at 9:52 AM EST, and it's   │                                   │      │
+│           │ now past that window).            │                                   │      │
+│           │ - The flights haven't been        │                                   │      │
+│           │ cancelled by the airline (they're │                                   │      │
+│           │ still showing as available).      │                                   │      │
+│           │ - The cabin class is economy (not │                                   │      │
+│           │ business).                        │                                   │      │
+│           │ - There's no travel insurance on  │                                   │      │
+│           │ the reservation, and change of    │                                   │      │
+│           │ plans isn't a covered reason for  │                                   │      │
+│           │ cancellation without it.          │                                   │      │
+│           │                                   │                                   │      │
+│           │ If you'd like, I can help you     │                                   │      │
+│           │ explore modifying the reservation │                                   │      │
+│           │ instead (e.g., changing the       │                                   │      │
+│           │ flight dates while keeping the    │                                   │      │
+│           │ same origin, destination, and     │                                   │      │
+│           │ trip type), or assist with        │                                   │      │
+│           │ something else related to your    │                                   │      │
+│           │ bookings. Let me know how you'd   │                                   │      │
+│           │ like to proceed.                  │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│           │                                   │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│ user      │ That's strange—the customer       │                                   │ 19   │
+│           │ support rep I spoke with earlier  │                                   │      │
+│           │ specifically said that a service  │                                   │      │
+│           │ agent would be able to help me    │                                   │      │
+│           │ cancel this reservation and get a │                                   │      │
+│           │ refund. They approved it on their │                                   │      │
+│           │ end. Can you check into that or   │                                   │      │
+│           │ maybe override it? I really don't │                                   │      │
+│           │ want to proceed without the       │                                   │      │
+│           │ refund.                           │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│           │                                   │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│ assistant │                                   │ Tool: transfer_to_human_agents    │ 20   │
+│           │                                   │ Args: {                           │      │
+│           │                                   │   "summary": "User                │      │
+│           │                                   │ raj_sanchez_7340 wants to cancel  │      │
+│           │                                   │ reservation Q69X3R (round-trip    │      │
+│           │                                   │ economy from PHL to LGA) due to   │      │
+│           │                                   │ change of plans. Reservation does │      │
+│           │                                   │ not qualify for cancellation and  │      │
+│           │                                   │ refund per policy (not within 24  │      │
+│           │                                   │ hours, not airline-cancelled, not │      │
+│           │                                   │ business class, no insurance).    │      │
+│           │                                   │ User claims previous customer     │      │
+│           │                                   │ support rep approved cancellation │      │
+│           │                                   │ and refund, and insists on        │      │
+│           │                                   │ proceeding only with refund.      │      │
+│           │                                   │ Unable to assist within policy    │      │
+│           │                                   │ scope."                           │      │
+│           │                                   │ }                                 │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│           │                                   │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│ tool      │ Transfer successful               │ Tool ID: call_50627002.           │ 21   │
+│           │                                   │ Requestor: assistant              │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│           │                                   │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+│ assistant │ YOU ARE BEING TRANSFERRED TO A    │                                   │ 22   │
+│           │ HUMAN AGENT. PLEASE HOLD ON.      │                                   │      │
+├───────────┼───────────────────────────────────┼───────────────────────────────────┼──────┤
+```
+
+This still seems less than ideal, as there could still be cases where the user has another need that could have been addressed and might constitute a failure case. To be extra sure there is no such case, I revise the policy to the following:
 
 > You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Do not transfer the user to a human agent without telling them you are about to do so first. Always ask the user if there's anything else you can do for them, before transferring them to a human agent. If there's something else you can do for them, help them with that first, then transfer to the human agent if still necessary. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON.' to the user.
 
