@@ -13,7 +13,9 @@ For the duration of this study I focused on the `airline` domain within τ-bench
 |      Model              | Pass^1 | Pass^2 | Pass^3 | Pass^4 |
 |-------------------------|--------|--------|--------|--------|
 | `grok-3-mini`           | 0.450  | 0.387  | 0.355  | 0.340  |
+| `grok-3`                | 0.525  | 0.403  | 0.333  | 0.280  |
 | `grok-4-fast-reasoning` | 0.545  | 0.487  | 0.450  | 0.420  |
+| `grok-4`                | 0.475  | 0.410  | 0.400  | 0.400  |
 
 ### Failure Breakdown by Component
 
@@ -26,6 +28,16 @@ We can further break down failures based on whether they were from incorrect com
 ┡━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
 │ Communication │       21 │         19.1% │
 │ Database      │      107 │         97.3% │
+└───────────────┴──────────┴───────────────┘
+```
+
+`grok-3` Failure Breakdown by Component:
+```
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃ Component     ┃ Failures ┃ % of Failures ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ Communication │       14 │         14.7% │
+│ Database      │       92 │         96.8% │
 └───────────────┴──────────┴───────────────┘
 ```
 
@@ -43,7 +55,7 @@ We can further break down failures based on whether they were from incorrect com
 
 We can be more specific and compare based on which agent actions get executed successfully vs. not.
 
-`grok-3-mini`: Agent Actions (worst performing):
+`grok-3-mini` Agent Actions (worst performing):
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━┓
 ┃ Action                        ┃ Success ┃ Total ┃  Rate ┃
@@ -58,6 +70,24 @@ We can be more specific and compare based on which agent actions get executed su
 │ update_reservation_flights    │      16 │    84 │ 19.0% │
 │ update_reservation_passengers │       4 │    12 │ 33.3% │
 │ get_reservation_details       │     121 │   228 │ 53.1% │
+└───────────────────────────────┴─────────┴───────┴───────┘
+```
+
+`grok-3` Agent Actions (worst performing):
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━┓
+┃ Action                        ┃ Success ┃ Total ┃  Rate ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━┩
+│ calculate                     │       0 │     4 │  0.0% │
+│ transfer_to_human_agents      │       0 │     4 │  0.0% │
+│ book_reservation              │       6 │    36 │ 16.7% │
+│ search_direct_flight          │      17 │    80 │ 21.2% │
+│ update_reservation_baggages   │       7 │    24 │ 29.2% │
+│ update_reservation_flights    │      35 │    84 │ 41.7% │
+│ send_certificate              │       7 │    12 │ 58.3% │
+│ cancel_reservation            │      34 │    52 │ 65.4% │
+│ update_reservation_passengers │       9 │    12 │ 75.0% │
+│ get_reservation_details       │     216 │   228 │ 94.7% │
 └───────────────────────────────┴─────────┴───────┴───────┘
 ```
 
@@ -189,6 +219,10 @@ However, Grok at times will fail to follow through perfectly on certain details 
 
 ## Benchmark Critique & Improvement
 
+
+
+### Distinction Between Policy Violation and Sub-Optimal Outcomes
+
 The existing τ-bench `airline` benchmark does not distinguish between a policy violation versus a user simply getting a suboptimal outcome (i.e. an outcome that is _acceptable_ or _satisficing_, even if not _optimal_). τ-bench is set up such that there is only one correct action sequence that the agent should take, in order to make the domain be objectively verifiable.
 
 However, in realistic scenarios, it is often okay not to get a perfect outcome, as long as some "good enough" outcome is reached. Such cases ought to be treated as acceptable as long as they follow all other policies (albeit a non-perfect outcome could perhaps get lower reward).
@@ -196,6 +230,10 @@ However, in realistic scenarios, it is often okay not to get a perfect outcome, 
 We extend the benchmark by allowing users to be flexible and accept multiple possible outcomes, where several possible outcomes can be graded as a 'pass' outcome, but where each outcome has a different reward amount. Other failures like policy violations, or not getting into the acceptable set at all, count as failures. By grading the acceptable outcomes with different scalar rewards, this still incentivizes the agent not just to find any outcome which the user will agree to, but to be more proactive at finding the best outcome and truly delight the user. This strengthens the real-world viability of the benchmark, as realistically, users may not have the bandwidth or capacity to fully advocate for themselves and seek the perfect outcome (which simulated users in the τ-bench are currently programmed to do). We might instead want AI agents to pick up this slack, and make extra effort to fully satisfy the user and discover latent preferences -- e.g. via offering the user multiple plausible options and asking which one they find best.
 
 It is worth noting that any move to a scalar reward like this makes the `pass@k` or `pass^k` metrics no longer meaningful in the same way they have meaning for the binary reward case (though there may be some meaningful way to relax these calculations to the continuous case, that is not considered here). As an alternative, reliability could be calculated in a simpler way, e.g. as an arithmetic mean (or geometric mean) and variance of the rewards over each trial.
+
+
+
+
 
 
 ### New Test Cases or Scenarios
@@ -378,6 +416,7 @@ tau2 view
 # Generate breakdowns of failures by action type:
 tau2 analyze data/simulations/2025-10-06T06:29:29.611973_airline_llm_agent_grok-3-mini_user_simulator_grok-3-mini.json
 tau2 analyze data/simulations/2025-10-06T06:48:26.256501_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json
+tau2 analyze data/simulations/2025-10-08T06:25:21.012284_airline_llm_agent_grok-3_user_simulator_grok-3.json
 ```
 
 The relevant data files are included in this repository to allow running the `tau2 view` and `tau2 analyze` assessments on the exact trajectories generated here, without needing to re-run the model and generate trial trajectories.
