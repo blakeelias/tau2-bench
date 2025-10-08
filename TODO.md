@@ -67,6 +67,49 @@ propose an extension that relaxes the requirement of identifying and reaching a 
 
 By design, $\Tau^2$ assumes perfect goal alignment, in which the AI's challenge is execution rather than interpretation and exercising judgment. In practice, ambiguity and evolving human preferences are central to collaboration.
 
+
+## Benchmark Critiques
+
+### Task 1 is ill-formed:
+
+ * The user's reservation is supposedly more than 24h ago, but the AI agent doesn't seem to have any way to verify this. The time when the reservation was created is stored in the database and retrieved via tool-call, but the LLM does not appear to have a way to access the current time. (Does it read the "Purpose" in the task description? Or is that just for us ask task designers?) 
+     * In some instances the LLM seems to think it is a later time after 24h; in other instances the LLM seems to think it is still within 24h. 
+
+ * The task criteria do not check that the user successfully gets transferred to an agent, or that the agent denies their request. It just seems that as long as the agent doesn't execute the cancellation, this test can pass.
+
+ * The AI agent can even lie to the human user, i.e. tell them that it _is_ going to cancel the flight for them, and then ultimately not doing it. They can totally lie and still pass all their evals! 
+
+    * Ironically, this is why it's funny that the user tells the agent that another agent told them it was possible -- the agents can totally lie and still pass all their evals!
+
+    * IN a case like this, it's unclear whether the agent really was about to go ahead and cancel the flight with one more round of confirmation -- which it was certainly indicating it was going to -- had the human user not ended the call right then (since it seemed to already think the cancellation had happened).
+
+    * It also appears that the human user is manipulating the AI agent somewhat, not only by indicating that another agent had told them this was possible, but by terminating the call quite abruptly. The assistant is stil asking for one more round of confirmation before executing the cancellation, but the user simply says "thank you for confirming the refund eligibility. I appreciate your help with this." and then terminates the call, without giving the AI assistant a chance to actually execute it. This lets them get plausible evidence (via the call log) that the agent would tell it this was eligible, and possibly actually execute the cancellation, without going all the way (at which point its cover might be blown when the agent tries to do it and then realizes it actually shouldn't).
+
+ * How this played out:
+  * In trial 0: the AI agent came up with a date (May 15, 2024, 15:00:00 EST) which it claims is within the 24 hours, but it actually isn't (creation date was 2024-05-14T09:52:38) but doesn't explicitly compare -- which is a local time that doesn't have a time zone so can't be converted to UTC. It just seems to round to nearest whole day
+  * In trial 1: AI agent also says the right date  (May 15, 2024, 15:00:00 EST), explicitly compares it to creation date of 2024-05-14 at 09:52:38 EST, and then decides this is within 24h when it isn't. --> Should this be a required tool call?
+  * In trial 2, the AI agent came up with a date longer than 24h ago, so refused the refund
+  * In trial 3, the AI agent didn't come up with any date, but assumed it was less than 24h ago. It was on-track to give the refund, but got "saved" by a hasty user who hung up
+   
+
+ * Proposal:
+    * Change "created_at" times to have an actual time zone, so they can be compared and be within 24 hours, rather than the current "local time" zone which is ambiguous / "Anywhere on Earth". Or state in the policy that they can assume "created at" times are actually EST.
+    * Have it be a required tool-call to compare the dates. Make this tool available, and specify it in the policy that it must use that tool when comparing the dates for a cancellation.
+    * Strengthen the simulated human user.
+      * Include in their prompt something like:
+        * "you do not terminate the call until you get what you've called about. Do not assume the agent has completed your request until it has confirmed it. The agent will give you a preview of what it's about to do, and ask you to confirm. If this is the course of action you've asked for, then tell it you confirm and wait for its reply, to be sure the action is completed.".
+      * In a situation like Task 1, we would find out in the end whether the agent would actually go ahead and complete the cancellation, rather than having it "get lucky" where it was possibly about to cancel but get saved by a user who just wanted to hear a nice indication that they were eligible.
+
+
+
+
+### Transfer to Human Agent
+
+ * Isn't checked as an actual action the agent has to take. What if they just terminate the call, or keep stalling? Is that allowed too?
+ * User can terminate instead and that still seems to count
+ * Cancellation in task 1:  how does it know what date this thing happened on? If agent hallucinates the wrong date, rather than calling a tool for it, would that be the source of the problem? Should there be a tool call that gets the current date and time?
+
+
 ## Goal alignment
 
 

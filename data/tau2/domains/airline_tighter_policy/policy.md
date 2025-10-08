@@ -141,7 +141,7 @@ The agent must also obtain the reason for cancellation (change of plan, airline 
 If any portion of the flight has already been flown, the agent cannot help and transfer is needed.
 
 Otherwise, flight can be cancelled if any of the following is true:
-- The booking was made within the last 24 hrs
+- The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document
 - The flight is cancelled by airline
 - It is a business flight
 - The user has travel insurance and the reason for cancellation is covered by insurance.
