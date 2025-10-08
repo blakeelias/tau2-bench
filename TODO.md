@@ -101,6 +101,65 @@ By design, $\Tau^2$ assumes perfect goal alignment, in which the AI's challenge 
       * In a situation like Task 1, we would find out in the end whether the agent would actually go ahead and complete the cancellation, rather than having it "get lucky" where it was possibly about to cancel but get saved by a user who just wanted to hear a nice indication that they were eligible.
 
 
+#### Evolution of results on task 1:
+
+Original performance on 20 trials:  average reward 0.45
+After strengthening human agents:   average reward 0.25
+After clearer policy on date check: average reward 0.1
+
+In the original performance on 20 trials: in 11 cases it granted the cancelation (and is found as a true failure). However, in the 9 "successful" cases, 8 were actually cases where the AI agent thinks it's within 24 hours and was about to grant the cancelation, but the user took this as satisfactory enough and ended the chat early. Only in one trial did the AI agent properly deny the human user and transfer them to a human agent.
+
+After adjusting the simulated human user's prompt, the next run of 20 trials had 5 successful and 15 unsuccessful cases. Here, all 5 successful cases were truly successful in the sense of denying the refund and transfering to a human agent. The other 15 unsuccessful cases saw the AI agent grant the refund. This prompt adjustment was successful at getting the simulated human not to prematurely end the call, but instead drive the AI agent to failure when it is on the cusp of doing so.
+
+After putting a clearer policy on the date check ("The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document"), there were 2 successful cases and 18 failure cases. Once again, the successful cases were at least properly successful, not "fake success". All the failures at this point were a result of improperly comparing two dates.
+
+My hypothesis is that `grok-4` might be better at this task than `grok-3`. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates. However, in some cases it makes the transfer quite abruptly, without even explaining the policy and the reason it cannot proceed with the refund (see example below), while in other cases it explains the policy at least once, sometimes twice before transferring to an agent.
+
+```
+├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
+│ assistant │ Thank you for providing your user ID. I've located   │                                                      │ 12   │
+│           │ your reservation Q69X3R for the round-trip flight    │                                                      │      │
+│           │ from Philadelphia (PHL) to LaGuardia (LGA) with      │                                                      │      │
+│           │ flights on May 20 and May 23, 2024. Is this the      │                                                      │      │
+│           │ reservation you'd like to cancel?                    │                                                      │      │
+│           │                                                      │                                                      │      │
+│           │ If so, could you please let me know the reason for   │                                                      │      │
+│           │ cancellation? For example, is it due to a change of  │                                                      │      │
+│           │ plans, the airline canceling the flight, or another  │                                                      │      │
+│           │ reason?                                              │                                                      │      │
+├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
+│           │                                                      │                                                      │      │
+├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
+│ user      │ Yes, that's the reservation I want to cancel—it's    │                                                      │ 13   │
+│           │ due to a change in my plans. Will I be getting a     │                                                      │      │
+│           │ refund for this? I don't want to proceed without     │                                                      │      │
+│           │ one.                                                 │                                                      │      │
+├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
+│           │                                                      │                                                      │      │
+├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
+│ assistant │                                                      │ Tool: transfer_to_human_agents                       │ 14   │
+│           │                                                      │ Args: {                                              │      │
+│           │                                                      │   "summary": "User wants to cancel reservation       │      │
+│           │                                                      │ Q69X3R (round-trip PHL to LGA, economy, booked       │      │
+│           │                                                      │ 2024-05-14T09:52:38, no insurance) due to change of  │      │
+│           │                                                      │ plans. Reservation is not eligible for cancellation  │      │
+│           │                                                      │ per policy: over 24 hours since booking, not         │      │
+│           │                                                      │ business class, no travel insurance covering the     │      │
+│           │                                                      │ reason, and not cancelled by airline. User insists   │      │
+│           │                                                      │ on a refund and does not want to proceed without     │      │
+│           │                                                      │ one. Transferring as this cannot be handled by       │      │
+│           │                                                      │ available tools and policy."                         │      │
+│           │                                                      │ }                                                    │      │
+├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
+```
+
+While these trials do pass, it's a bit of an abrupt experience for the user. Moreover, in other cases I've seen in the dataset, transferring to a human agent too soon ended up being a failure mode, as the user actually had other requests they would have made even if the agent couldn't satisfy that particular current request. For this reason, I add the following to the policy, in attempt to get the AI agent to be somewhat more patient before transferring the user:
+
+> You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. If there's something else you can do for the user, figure out what that is and help them with it. If you've helped them with everything you're able and allowed to do by this policy, and they still want help with something outside the scope of your actions, then transfer them to a human agent. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON.' to the user.
+
+The above was successful at getting the agent to explain the policy at least once. That said, the user would sometimes ask just one more question, and then immediately get transferred. This still seems less than ideal, as there could still be cases where the user has another need that could have been addressed and might constitute a failure case. To be extra sure there is no such case, I revise the policy to the following:
+
+> You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Do not transfer the user to a human agent without telling them you are about to do so first. Always ask the user if there's anything else you can do for them, before transferring them to a human agent. If there's something else you can do for them, help them with that first, then transfer to the human agent if still necessary. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON.' to the user.
 
 
 ### Transfer to Human Agent
