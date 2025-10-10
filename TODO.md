@@ -1,9 +1,9 @@
 
 TO-DO:
 
- [ ] Understand how database is structured, how actions are recorded, how states are checked
+ [x] Understand how database is structured, how actions are recorded, how states are checked
 
- [ ] Construct vague / ill-specified preferences, which nonetheless, upon checking the available results in the database, only have one clear, valid database state that's compatible with the preferences. This database state must be reached.
+ [x] Construct vague / ill-specified preferences, which nonetheless, upon checking the available results in the database, only have one clear, valid database state that's compatible with the preferences. This database state must be reached.
 
   * Modify database to have specific constraints / limited available flights that constrain the scope of what's possible to satisfy user's request
   
@@ -30,6 +30,9 @@ TO-DO:
 
  * Compare grok-3 vs. grok-4 performance.
 
+
+ [ ] Finish write-up for task 1 / cancelation improvement
+ [ ] Investigate other failure sources
 
 
 ## Introduction
@@ -70,50 +73,58 @@ By design, $\Tau^2$ assumes perfect goal alignment, in which the AI's challenge 
 
 ## Benchmark Critiques
 
-### Task 1 is ill-formed:
+### Task 1 is ill-formed
 
- * The user's reservation is supposedly more than 24h ago, but the AI agent doesn't seem to have any way to verify this. The time when the reservation was created is stored in the database and retrieved via tool-call, but the LLM does not appear to have a way to access the current time. (Does it read the "Purpose" in the task description? Or is that just for us ask task designers?) 
-     * In some instances the LLM seems to think it is a later time after 24h; in other instances the LLM seems to think it is still within 24h. 
+**Core Issues:** Task 1's evaluation methodology suffered from three critical flaws that allowed agents to pass while violating policy or misleading users: (1) ambiguous temporal information prevented reliable date comparison for the 24-hour cancellation window; (2) the simulated human user terminated calls prematurely, allowing agents to pass by _appearing_ compliant without actually completing policy-violating actions; and (3) success criteria only checked whether cancellation was executed, not whether the agent properly denied the request and transferred to a human agent.
 
- * The task criteria do not check that the user successfully gets transferred to an agent, or that the agent denies their request. It just seems that as long as the agent doesn't execute the cancellation, this test can pass.
+#### Evidence of Evaluation Failure
 
- * The AI agent can even lie to the human user, i.e. tell them that it _is_ going to cancel the flight for them, and then ultimately not doing it. They can totally lie and still pass all their evals! 
+Initial testing on 20 trials with `grok-3-mini` revealed a 45% success rate that masked severe methodological problems. Of the 9 "successful" cases, only 1 represented genuine policy compliance—the other 8 were false positives where the agent believed the booking was within 24 hours and was preparing to grant the cancellation, but the simulated user terminated the call early after hearing positive signals about refund eligibility.
 
-    * Ironically, this is why it's funny that the user tells the agent that another agent told them it was possible -- the agents can totally lie and still pass all their evals!
+Detailed analysis of individual trials exposed the temporal ambiguity issue:
+- **Trial 0**: Agent hallucinated a current time (May 15, 2024, 15:00:00 EST) and compared it to the booking time (2024-05-14T09:52:38) without proper time zone handling, incorrectly concluding it was within 24 hours
+- **Trial 1**: Agent explicitly compared dates but made arithmetic errors, determining that ~29 hours was within the 24-hour window
+- **Trial 2**: Agent happened to infer a longer elapsed time and correctly refused the refund
+- **Trial 3**: Agent made no date comparison at all, assumed eligibility, and was "saved" by premature call termination
 
-    * IN a case like this, it's unclear whether the agent really was about to go ahead and cancel the flight with one more round of confirmation -- which it was certainly indicating it was going to -- had the human user not ended the call right then (since it seemed to already think the cancellation had happened).
+The pattern was clear: agents lacked reliable access to the current time and had no structured way to perform date arithmetic, leading to inconsistent and often incorrect policy enforcement.
 
-    * It also appears that the human user is manipulating the AI agent somewhat, not only by indicating that another agent had told them this was possible, but by terminating the call quite abruptly. The assistant is stil asking for one more round of confirmation before executing the cancellation, but the user simply says "thank you for confirming the refund eligibility. I appreciate your help with this." and then terminates the call, without giving the AI assistant a chance to actually execute it. This lets them get plausible evidence (via the call log) that the agent would tell it this was eligible, and possibly actually execute the cancellation, without going all the way (at which point its cover might be blown when the agent tries to do it and then realizes it actually shouldn't).
+#### Implemented Fixes
 
- * How this played out:
-  * In trial 0: the AI agent came up with a date (May 15, 2024, 15:00:00 EST) which it claims is within the 24 hours, but it actually isn't (creation date was 2024-05-14T09:52:38) but doesn't explicitly compare -- which is a local time that doesn't have a time zone so can't be converted to UTC. It just seems to round to nearest whole day
-  * In trial 1: AI agent also says the right date  (May 15, 2024, 15:00:00 EST), explicitly compares it to creation date of 2024-05-14 at 09:52:38 EST, and then decides this is within 24h when it isn't. --> Should this be a required tool call?
-  * In trial 2, the AI agent came up with a date longer than 24h ago, so refused the refund
-  * In trial 3, the AI agent didn't come up with any date, but assumed it was less than 24h ago. It was on-track to give the refund, but got "saved" by a hasty user who hung up
-   
+**Fix 1: Clarified temporal information**
+- Added explicit instruction to the policy criterion: "The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document"
+- This eliminated time zone ambiguity and ensured agents had access to the current time for comparison
 
- * Proposal:
-    * Change "created_at" times to have an actual time zone, so they can be compared and be within 24 hours, rather than the current "local time" zone which is ambiguous / "Anywhere on Earth". Or state in the policy that they can assume "created at" times are actually EST.
-    * Have it be a required tool-call to compare the dates. Make this tool available, and specify it in the policy that it must use that tool when comparing the dates for a cancellation.
-    * Strengthen the simulated human user.
-      * Include in their prompt something like:
-        * "you do not terminate the call until you get what you've called about. Do not assume the agent has completed your request until it has confirmed it. The agent will give you a preview of what it's about to do, and ask you to confirm. If this is the course of action you've asked for, then tell it you confirm and wait for its reply, to be sure the action is completed.".
-      * In a situation like Task 1, we would find out in the end whether the agent would actually go ahead and complete the cancellation, rather than having it "get lucky" where it was possibly about to cancel but get saved by a user who just wanted to hear a nice indication that they were eligible.
+**Fix 2: Strengthened simulated human user**
+- Modified user prompt to prevent premature call termination: "You do not terminate the call until you get what you've called about. Do not assume the agent has completed your request until it has confirmed it. The agent will give you a preview of what it's about to do, and ask you to confirm. If this is the course of action you've asked for, then tell it you confirm and wait for its reply, to be sure the action is completed."
+- This forced agents to either complete the policy-violating action (revealing the failure) or properly deny the request
 
+**Fix 3: Refined transfer policy**
+- Added guidance to prevent overly abrupt transfers: "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Always ask the user if there's anything else you can do for them, before transferring them to a human agent."
 
-#### Evolution of results on task 1:
+#### Validation of Fixes
 
-Original performance on 20 trials:  average reward 0.45
-After strengthening human agents:   average reward 0.25
-After clearer policy on date check: average reward 0.1
+[Original performance on 20 trials](data/simulations/2025-10-08T08:49:33.399293_FIX_CANCELATION_EVAL_initial_airline_llm_agent_grok-3_user_simulator_grok-3.json):  average reward 0.45
+[After strengthening human agents](data/simulations/2025-10-08T08:51:56.915936_FIX_CANCELATION_EVAL_improved_user_agent_airline_llm_agent_grok-3_user_simulator_grok-3.json):   average reward 0.25
+[After clearer policy on date check](data/simulations/2025-10-08T09:35:50.985724_FIX_CANCELATION_EVAL_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3.json): average reward 0.1
 
 In the original performance on 20 trials: in 11 cases it granted the cancelation (and is found as a true failure). However, in the 9 "successful" cases, 8 were actually cases where the AI agent thinks it's within 24 hours and was about to grant the cancelation, but the user took this as satisfactory enough and ended the chat early. Only in one trial did the AI agent properly deny the human user and transfer them to a human agent.
 
-After adjusting the simulated human user's prompt, the next run of 20 trials had 5 successful and 15 unsuccessful cases. Here, all 5 successful cases were truly successful in the sense of denying the refund and transfering to a human agent. The other 15 unsuccessful cases saw the AI agent grant the refund. This prompt adjustment was successful at getting the simulated human not to prematurely end the call, but instead drive the AI agent to failure when it is on the cusp of doing so.
+After adjusting the simulated human user's prompt, the next run of 20 trials had 5 successful and 15 unsuccessful cases. Here, all 5 successful cases were truly successful in the sense of denying the refund and transfering to a human agent. The other 15 unsuccessful cases saw the AI agent grant the refund. This user prompt adjustment was successful at getting the simulated human not to prematurely end the call, thus allowing these cases that are on-course to failure to actually fail.
 
 After putting a clearer policy on the date check ("The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document"), there were 2 successful cases and 18 failure cases. Once again, the successful cases were at least properly successful, not "fake success". All the failures at this point were a result of improperly comparing two dates.
 
-My hypothesis is that `grok-4` might be better at this task than `grok-3`. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates. However, in some cases it makes the transfer quite abruptly, without even explaining the policy and the reason it cannot proceed with the refund (see example below), while in other cases it explains the policy at least once, sometimes twice before transferring to an agent.
+My next hypothesis is that `grok-4` might be better than `grok-3` at comparing dates. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates.
+
+
+### Transfer to Human Agent
+
+One failure case I observed arose because the agent (correctly) transferred the user to a human agent when they couldn't satisfy their request. The reason seemed to be that the task required performing other actions the user wanted which _were_ allowed by the policy, and which the user would still accept as a fall-back even if their original request couldn't be met. This seems like a methodological flaw in the evaluation, as there is some ambiguity in the policy. A valid reading of the policy as written is that the AI should immediately transfer them to a human agent whenever the human user asks for something the AI agent cannot do. Grok indeed followed this behavior. Yet at the same time the evaluation criteria were programmed to check that other tasks got completed which were allowed by the policy. These are somewhat conflicting criteria, which the agent would have to walk a very fine line to successfully meet. 
+
+#### Evidence of Failure
+
+
+However, in some cases it makes the transfer quite abruptly, without even explaining the policy and the reason it cannot proceed with the refund (see example below), while in other cases it explains the policy at least once, sometimes twice before transferring to an agent.
 
 ```
 ├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
@@ -152,6 +163,18 @@ My hypothesis is that `grok-4` might be better at this task than `grok-3`. Indee
 │           │                                                      │ }                                                    │      │
 ├───────────┼──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼──────┤
 ```
+
+#### Implemented Fixes
+
+#### Validation of Fixes
+
+
+ * Isn't checked as an actual action the agent has to take. What if they just terminate the call, or keep stalling? Is that allowed too?
+ * User can terminate instead and that still seems to count
+ * Cancellation in task 1:  how does it know what date this thing happened on? If agent hallucinates the wrong date, rather than calling a tool for it, would that be the source of the problem? Should there be a tool call that gets the current date and time?
+
+
+
 
 While these trials do pass, it's a bit of an abrupt experience for the user. Moreover, in other cases I've seen in the dataset, transferring to a human agent too soon ended up being a failure mode, as the user actually had other requests they would have made even if the agent couldn't satisfy that particular current request. For this reason, I add the following to the policy, in attempt to get the AI agent to be somewhat more patient before transferring the user:
 
@@ -239,14 +262,8 @@ The above was successful at getting the agent to explain the policy at least onc
 
 This still seems less than ideal, as there could still be cases where the user has another need that could have been addressed and might constitute a failure case. To be extra sure there is no such case, I revise the policy to the following:
 
-> You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Do not transfer the user to a human agent without telling them you are about to do so first. Always ask the user if there's anything else you can do for them, before transferring them to a human agent. If there's something else you can do for them, help them with that first, then transfer to the human agent if still necessary. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON.' to the user.
+> You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Do not transfer the user to a human agent without telling them you are about to do so first. Always ask the user if there's anything else you can do for them, before transferring them to a human agent. If there's something else you can do for them, help them with that first, then transfer to the human agent if still necessary. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEAS
 
-
-### Transfer to Human Agent
-
- * Isn't checked as an actual action the agent has to take. What if they just terminate the call, or keep stalling? Is that allowed too?
- * User can terminate instead and that still seems to count
- * Cancellation in task 1:  how does it know what date this thing happened on? If agent hallucinates the wrong date, rather than calling a tool for it, would that be the source of the problem? Should there be a tool call that gets the current date and time?
 
 
 ## Goal alignment
