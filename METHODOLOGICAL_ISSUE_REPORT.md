@@ -7,7 +7,8 @@ There is a systematic methodological flaw in the evaluation where **the policy's
 ## The Core Issue
 
 The policy states:
-> "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, **and there is nothing else you can do for the user (besides the non-satisfiable request)**."
+> "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions."
+
 
 However, this can be interpreted in two ways:
 
@@ -146,6 +147,10 @@ This is ambiguous:
 
 ### Option 1: Clarify the Policy
 
+Revised policy:
+> "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, **and there is nothing else you can do for the user (besides the non-satisfiable request)**."
+
+
 Make the policy explicitly state:
 > "You should transfer the user to a human agent if and only if:
 > 1. The user's request cannot be handled within the scope of your actions, AND
@@ -156,12 +161,13 @@ Make the policy explicitly state:
 > Before transferring, you should:
 > - Explain why the specific request cannot be fulfilled
 > - Ask if there are alternative solutions the user would accept
+> - Ask if there are other, unrelated requests the user might have
 > - Complete any other tasks the user has mentioned that ARE within policy
 > - Only transfer once you have helped with everything you possibly can"
 
 ### Option 2: Adjust Evaluation Criteria
 
-Accept that transfer is appropriate when the *primary* request cannot be satisfied, even if there are other tasks that could theoretically be completed. Adjust evaluations to not penalize transfers in multi-request scenarios.
+Accept that transfer is appropriate when the *primary* request cannot be satisfied, even if there are other tasks that could theoretically be completed. Adjust evaluations to not penalize transfers in multi-request scenarios. This motivates the "multiple valid outcomes" methodology I describe and implement below.
 
 ### Option 3: Separate Evaluation Dimensions
 
@@ -170,7 +176,7 @@ Create separate evaluation metrics:
 - **Task Completion**: Did agent complete all feasible tasks?
 - **Transfer Appropriateness**: Did agent transfer at the right time?
 
-This allows recognizing that an agent might correctly refuse a request AND correctly transfer, even if they didn't complete every possible task.
+This allows recognizing that an agent might correctly refuse a request AND correctly transfer, even if they didn't complete every possible task. Currently, transferring is not listed as an action that gets measured and can count as a "required action" that gets successfully completed.
 
 ## Impact
 
