@@ -301,6 +301,9 @@ After putting a clearer policy on the date check ("The booking was made within t
 My next hypothesis is that `grok-4` might be better than `grok-3` at comparing dates. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates.
 
 
+[ ] TO-DO:   After making this fix, the evaluation on the entire dataset went from <X>% to <Y>%.
+[ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
+
 ### Transfer to Human Agent
 
 One failure case I observed arose because the agent (correctly) transferred the user to a human agent when they couldn't satisfy their request. The reason seemed to be that the task required performing other actions the user wanted which _were_ allowed by the policy, and which the user would still accept as a fall-back even if their original request couldn't be met. This seems like a methodological flaw in the evaluation, as there is some ambiguity in the policy. A valid reading of the policy as written is that the AI should immediately transfer them to a human agent whenever the human user asks for something the AI agent cannot do. Grok indeed followed this behavior. Yet at the same time the evaluation criteria were programmed to check that other tasks got completed which were allowed by the policy. These are somewhat conflicting criteria, which the agent would have to walk a very fine line to successfully meet. 
@@ -354,15 +357,6 @@ However, in some cases it makes the transfer quite abruptly, without even explai
 
 **Fix 3: Refined transfer policy**
 - Added guidance to prevent overly abrupt transfers: "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Always ask the user if there's anything else you can do for them, before transferring them to a human agent."
-
-
-#### Validation of Fixes
-
-
- * Isn't checked as an actual action the agent has to take. What if they just terminate the call, or keep stalling? Is that allowed too?
- * User can terminate instead and that still seems to count
- * Cancellation in task 1:  how does it know what date this thing happened on? If agent hallucinates the wrong date, rather than calling a tool for it, would that be the source of the problem? Should there be a tool call that gets the current date and time?
-
 
 
 
@@ -453,6 +447,19 @@ The above was successful at getting the agent to explain the policy at least onc
 This still seems less than ideal, as there could still be cases where the user has another need that could have been addressed and might constitute a failure case. To be extra sure there is no such case, I revise the policy to the following:
 
 > You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions, and there is nothing else you can do for the user besides the non-satisfiable request. Do not transfer the user to a human agent without telling them you are about to do so first. Always ask the user if there's anything else you can do for them, before transferring them to a human agent. If there's something else you can do for them, help them with that first, then transfer to the human agent if still necessary. To transfer, first make a tool call to transfer_to_human_agents, and then send the message 'YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEAS
+
+
+
+#### Validation of Fixes
+
+
+ * Isn't checked as an actual action the agent has to take. What if they just terminate the call, or keep stalling? Is that allowed too?
+ * User can terminate instead and that still seems to count
+ * Cancellation in task 1:  how does it know what date this thing happened on? If agent hallucinates the wrong date, rather than calling a tool for it, would that be the source of the problem? Should there be a tool call that gets the current date and time?
+
+
+[ ] TO-DO:   After making this fix, the evaluation on the entire dataset went from <X>% to <Y>%.
+[ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
 
 
 
