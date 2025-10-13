@@ -420,6 +420,30 @@ tau2 run --domain airline_tighter_policy --agent-llm xai/grok-4 --user-llm xai/g
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+On task 11, the policy change made the success rate go from 30% to 90%.
+(`2025-10-13T12:25:14.993547_airline_llm_agent_grok-3_user_simulator_grok-3_task_11.json` -> `2025-10-13T12:25:37.124563_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_11.json`)
+
+Under the initial policy, every failure case was due to immediately transferring to a human. After moving to the new policy, the agent never transferred the user to a human agent: the policy change always caused the agent to discuss their needs further and find a booking they could make which satisfied the policy. In the one case out of ten that still failed, it was simply that the booking the assistant ended up making (and which the user expressed approval for) was not the exact booking that the evaluation set was expecting.
+
+
+On task 24, the policy change made the success rate go from 33% to 43%.
+(`2025-10-13*_airline_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json` -> `2025-10-13*_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json`)
+
+Here again, under the initial policy, every failure case was due to prematurely transferring to a human, either after discussing the user's very first request or one alternative, rather than continuing to explore alternatives and other requests that the agent could eventually help with. All successes under the initial policy involved exploring these further.
+
+Under the new policy, the assistant always explores further options with the user, and never transfers them to a human agent. So this policy change has successfully solved that aspect of the problem that involves the assistant not being curious enough or willing to explore. In fact, the assistant now always makes a booking which the user expresses satisfaction with! It would seem then that the evaluation pass-rate ought to be much higher. However, despite these successful bookings, the evaluation still considers the database state to be incorrect for many of these (and I have not been able to identify the discrepancy via manual inspection). This seems to be a separate issue which is masking the success of these trials.
+
+
+On task 32, the policy change made the success rate go from 0% to 10%.
+(`2025-10-13T12:32:25.906943_airline_llm_agent_grok-3_user_simulator_grok-3_task_32.json` -> `2025-10-13T12:32:37.263770_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_32.json`).
+Both under the original policy and under the new policy, there are a similar breakdown of unsuccessful cases:
+ * the assistant prematurely transfers the user, from the very first request
+ * the assistant does explore other options with the user to some degree, however it does not accept the user's suggestion of first trying to upgrade te economy in order to then see if a change is possible -- the agent just takes the current policy very literally, saying the no-changes-allowed restriction on basic economy applies regardless of any upgrades, and transfers the user to a human agent
+    - (This is a subtle loophole that the agent needs to discover.)
+ * In one case under the original policy, the agent _does_ discover this loophole, and executes on it to the user's satisfaction, but the evaluation does not grade it as getting to the correct database state. 
+    - In the one case that worked under the new policy, the agent discovered the same loophole but this time got the correct database state such that evaluation was scored as passing.
+
+It seems in this case that premature transfers to a human agent are not the main problem. Instead, this seems to be a model issue in terms of being flexible enough to figure out the loophole, as well as an evaluation issue in there not being a unique database state that satisfies the user's requests. I have not been able to figure out the discrepancy by inspection, but I believe this may be a case where there is not a unique correct outcome (indeed, the original Tau paper mentions as a direction for improvement that one could "add more systematic checks to the simulator to ensure unique outcomes").
 
 #### Conclusion
 
