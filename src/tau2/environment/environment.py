@@ -43,6 +43,7 @@ class Environment:
         tools: Optional[ToolKitBase] = None,
         user_tools: Optional[ToolKitBase] = None,
         solo_mode: bool = False,
+        domain_user_sim_guidelines: Optional[str] = None,
     ):
         """
         Environment
@@ -52,12 +53,14 @@ class Environment:
             tools: The tools available to the assistant in the domain.
             user_tools: The tools available to the user in the domain.
             solo_mode: The agent will have access to both user and assistant tools.
+            domain_user_sim_guidelines: The domain-specific user simulation guidelines.
         """
         self.domain_name = domain_name
         self.policy = policy
         self.tools = tools
         self.user_tools = user_tools
         self.solo_mode = solo_mode
+        self.domain_user_sim_guidelines = domain_user_sim_guidelines
         if self.solo_mode:
             self.validate_solo_mode()
         self.sync_tools()
@@ -73,6 +76,12 @@ class Environment:
         Get the policy of the domain.
         """
         return self.policy
+
+    def get_domain_user_sim_guidelines(self) -> Optional[str]:
+        """
+        Get the domain-specific user simulation guidelines.
+        """
+        return self.domain_user_sim_guidelines
 
     def get_tools(self) -> list[Tool]:
         """

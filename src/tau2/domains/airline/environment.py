@@ -9,6 +9,7 @@ from tau2.domains.airline.utils import (
     AIRLINE_DB_PATH,
     AIRLINE_POLICY_PATH,
     AIRLINE_TASK_SET_PATH,
+    AIRLINE_USER_SIM_GUIDELINES_PATH,
 )
 from tau2.environment.environment import Environment
 
@@ -24,10 +25,18 @@ def get_environment(
     tools = AirlineTools(db)
     with open(AIRLINE_POLICY_PATH, "r") as fp:
         policy = fp.read()
+
+    # Load domain-specific user simulation guidelines if available
+    domain_user_sim_guidelines = None
+    if AIRLINE_USER_SIM_GUIDELINES_PATH.exists():
+        with open(AIRLINE_USER_SIM_GUIDELINES_PATH, "r") as fp:
+            domain_user_sim_guidelines = fp.read()
+
     return Environment(
         domain_name="airline",
         policy=policy,
         tools=tools,
+        domain_user_sim_guidelines=domain_user_sim_guidelines,
     )
 
 

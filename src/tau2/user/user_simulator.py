@@ -56,6 +56,19 @@ def get_global_user_sim_guidelines(use_tools: bool = False) -> str:
 
 SYSTEM_PROMPT = """
 {global_user_sim_guidelines}
+{domain_user_sim_guidelines}
+
+<scenario>
+{instructions}
+</scenario>
+""".strip()
+
+
+SYSTEM_PROMPT_WITH_DOMAIN = """
+{global_user_sim_guidelines}
+
+## Domain-Specific Guidelines
+{domain_user_sim_guidelines}
 
 <scenario>
 {instructions}
@@ -72,9 +85,11 @@ class UserSimulator(BaseUser):
         instructions: Optional[UserInstructions] = None,
         llm: Optional[str] = None,
         llm_args: Optional[dict] = None,
+        domain_simulation_guidelines: Optional[str] = None,
     ):
         super().__init__(instructions=instructions, llm=llm, llm_args=llm_args)
         self.tools = tools
+        self.domain_simulation_guidelines = domain_simulation_guidelines
 
     @property
     def global_simulation_guidelines(self) -> str:
@@ -92,10 +107,18 @@ class UserSimulator(BaseUser):
         if self.instructions is None:
             logger.warning("No instructions provided for user simulator")
 
-        system_prompt = SYSTEM_PROMPT.format(
-            global_user_sim_guidelines=self.global_simulation_guidelines,
-            instructions=self.instructions,
-        )
+        if self.domain_simulation_guidelines:
+            system_prompt = SYSTEM_PROMPT_WITH_DOMAIN.format(
+                global_user_sim_guidelines=self.global_simulation_guidelines,
+                domain_user_sim_guidelines=self.domain_simulation_guidelines,
+                instructions=self.instructions,
+            )
+        else:
+            system_prompt = SYSTEM_PROMPT.format(
+                global_user_sim_guidelines=self.global_simulation_guidelines,
+                domain_user_sim_guidelines="",
+                instructions=self.instructions,
+            )
         return system_prompt
 
     def get_init_state(

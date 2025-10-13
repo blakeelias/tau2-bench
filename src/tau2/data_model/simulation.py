@@ -153,6 +153,13 @@ class RunConfig(BaseModel):
             default=DEFAULT_LOG_LEVEL,
         ),
     ]
+    experiment_note: Annotated[
+        Optional[str],
+        Field(
+            description="An optional note/tag to include in the experiment filename and info",
+            default=None,
+        ),
+    ]
 
     def validate(self) -> None:
         """
@@ -283,6 +290,9 @@ class UserInfo(BaseModel):
     global_simulation_guidelines: Optional[str] = Field(
         description="The global simulation guidelines for the user.", default=None
     )
+    domain_simulation_guidelines: Optional[str] = Field(
+        description="The domain-specific simulation guidelines for the user.", default=None
+    )
 
 
 class Info(BaseModel):
@@ -297,6 +307,9 @@ class Info(BaseModel):
     environment_info: EnvironmentInfo = Field(description="Environment information.")
     seed: Optional[int] = Field(
         description="The seed used for the simulation.", default=None
+    )
+    experiment_note: Optional[str] = Field(
+        description="An optional note/tag for this experiment.", default=None
     )
 
 

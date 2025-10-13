@@ -90,7 +90,14 @@ def make_run_name(config: RunConfig) -> str:
     clean_llm_user_name = config.llm_user.split("/")[-1]
     user_name = f"{config.user}_{clean_llm_user_name}"
 
-    return f"{get_now()}_{config.domain}_{agent_name}_{user_name}"
+    base_name = f"{get_now()}_{config.domain}_{agent_name}_{user_name}"
+
+    if config.experiment_note:
+        # Clean the experiment note for use in filename
+        clean_note = config.experiment_note.replace(" ", "_").replace("/", "-")
+        return f"{base_name}_{clean_note}"
+
+    return base_name
 
 
 def run_domain(config: RunConfig) -> Results:
@@ -232,6 +239,7 @@ def run_tasks(
         max_steps=max_steps,
         max_errors=max_errors,
         seed=seed,
+        experiment_note=config.experiment_note,
     )
     simulation_results = Results(
         info=info,
@@ -466,11 +474,15 @@ def run_task(
             "Dummy user can only be used with solo agent"
         )
 
+    # Get domain-specific user simulation guidelines from environment
+    domain_user_sim_guidelines = environment.get_domain_user_sim_guidelines()
+
     user = UserConstructor(
         tools=user_tools,
         instructions=str(task.user_scenario),
         llm=llm_user,
         llm_args=llm_args_user,
+        domain_simulation_guidelines=domain_user_sim_guidelines,
     )
 
     orchestrator = Orchestrator(
@@ -514,12 +526,19 @@ def get_info(
     max_steps: int = 100,
     max_errors: int = 10,
     seed: Optional[int] = None,
+    experiment_note: Optional[str] = None,
 ) -> Info:
+    # Get domain-specific user simulation guidelines
+    env_constructor = registry.get_env_constructor(domain)
+    environment = env_constructor()
+    domain_user_sim_guidelines = environment.get_domain_user_sim_guidelines()
+
     user_info = UserInfo(
         implementation=user,
         llm=llm_user,
         llm_args=llm_args_user,
         global_simulation_guidelines=get_global_user_sim_guidelines(),
+        domain_simulation_guidelines=domain_user_sim_guidelines,
     )
     agent_info = AgentInfo(
         implementation=agent,
@@ -538,4 +557,5 @@ def get_info(
         agent_info=agent_info,
         environment_info=environment_info,
         seed=seed,
+        experiment_note=experiment_note,
     )
