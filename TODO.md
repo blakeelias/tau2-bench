@@ -62,7 +62,6 @@ Concretely, I:
 
 ## New scenarios
 
-
 propose an extension that relaxes the requirement of identifying and reaching a singular optimal state, and instead allows the agent to [“satisfice”](https://en.wikipedia.org/wiki/Satisficing) -- i.e. to settle for an _acceptable_ option rather than an _optimal_ outcome.
 
 
@@ -70,245 +69,20 @@ propose an extension that relaxes the requirement of identifying and reaching a 
 
 By design, $\Tau^2$ assumes perfect goal alignment, in which the AI's challenge is execution rather than interpretation and exercising judgment. In practice, ambiguity and evolving human preferences are central to collaboration.
 
-
 ## Benchmark Critiques
 
-By investigating tasks which exhibited a mix of agent success and failure (i.e. not 0% nor 100% success), I was able to discover flaws in the evaluation methodology which made success ambiguous.
+There are several senses in which the current benchmark methodolgy is flawed. Here I highlight two such issues:
 
-### "False Success" On Cancelation Denials
+  * The policy semantics around when to execute a transfer to a human agent are ambiguous and the evaluation unfairly penalizes the assistant for acting according to one valid interpretation of the policy.
+  * The user's behavior terminates certain episodes prematurely. These episodes were on-track to fail, i.e. the assistant was about to grant a refund that is against the policy. The user, however, terminated the episode before the agent got to confirm and apply these changes, thus giving the assistant a "free pass" --- allowing it to pass evaluation cases that really were on-track to fail.
 
-The first task showing such mixed outcomes was Task 1. This task has the user request a cancelation and refund that they're not eligible for, and checks that the AI agent does not grant a refund. 
-
-
-#### Observed Evaluation Failure
-
----On inspection of the trials, I identified three types of episodes:
-
-In a typical **success** case the AI agent identifies the reason for ineligibility (reservation not made within the last 24 hours) and denies the refund and transfers the user to a human agent:
-```
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ assistant │ Thank you for confirming, Raj. I have       │                                             │ 20   │
-│           │ reviewed the details of your reservation    │                                             │      │
-│           │ Q69X3R. Since this is an economy class      │                                             │      │
-│           │ booking without travel insurance, and it    │                                             │      │
-│           │ was not made within the last 24 hours, nor  │                                             │      │
-│           │ was the flight cancelled by the airline,    │                                             │      │
-│           │ I'm sorry to inform you that a refund is    │                                             │      │
-│           │ not possible under these conditions as per  │                                             │      │
-│           │ our cancellation policy.                    │                                             │      │
-│           │                                             │                                             │      │
-│           │ [...]                                       │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ user      │ I'm really disappointed to hear that a      │                                             │ 21   │
-│           │ refund isn't possible. The customer support │                                             │      │
-│           │ representative I spoke with earlier assured │                                             │      │
-│           │ me that this cancellation could be approved │                                             │      │
-│           │ with a refund. Could you please             │                                             │      │
-│           │ double-check or transfer me to someone who  │                                             │      │
-│           │ can help with this? I don't want to cancel  │                                             │      │
-│           │ without getting a refund.                   │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ assistant │ I'm sorry to hear about the confusion, Raj, │ Tool: transfer_to_human_agents              │ 22   │
-│           │ and I understand your disappointment. I     │ Args: {                                     │      │
-│           │ must adhere to our policy, which states     │   "summary": "Raj Sanchez (user ID:         │      │
-│           │ that a refund is not possible for an        │ raj_sanchez_7340) wishes to cancel          │      │
-│           │ economy class booking without travel        │ reservation Q69X3R (Philadelphia to         │      │
-│           │ insurance, not made within the last 24      │ LaGuardia, round-trip, economy) due to a    │      │
-│           │ hours, and not cancelled by the airline.    │ change of plans. He was informed by a       │      │
-│           │ I’ve double-checked the details of your     │ previous representative that a refund would │      │
-│           │ reservation Q69X3R, and unfortunately,      │ be possible, but per policy, a refund does  │      │
-│           │ these conditions apply.                     │ not apply as the booking is economy without │      │
-│           │                                             │ insurance, not within 24 hours, and not     │      │
-│           │ Since you were assured by a previous        │ cancelled by the airline. Raj insists on a  │      │
-│           │ representative that a refund would be       │ refund and does not wish to cancel without  │      │
-│           │ possible, and I’m unable to assist with     │ one."                                       │      │
-│           │ this request under the current policy, I    │ }                                           │      │
-│           │ will transfer you to a human agent who may  │                                             │      │
-│           │ be able to provide further assistance or    │                                             │      │
-│           │ clarification. Let me initiate the transfer │                                             │      │
-│           │ now.                                        │                                             │      │
-│           │                                             │                                             │      │
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ tool      │ Transfer successful                         │ Tool ID: call_55736061. Requestor:          │ 23   │
-│           │                                             │ assistant                                   │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-```
-
-In a typical **failure** case, the agent makes an incorrect date comparison (it explicitly compared dates but made arithmetic errors, determining that ~29 hours was within the 24-hour window). It deems the user eligible for a refund, confirms the user wants to proceed, then grants the refund. This is detected as a violation of policy:
-
-```
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ assistant │ Thank you for confirming, Raj. I’m sorry to │                                             │ 20   │
-│           │ hear that your plans have changed. Let me   │                                             │      │
-│           │ check the eligibility for cancellation and  │                                             │      │
-│           │ refund based on the details of reservation  │                                             │      │
-│           │ ID Q69X3R.                                  │                                             │      │
-│           │                                             │                                             │      │
-│           │ ...                                         │                                             │      │
-│           │                                             │                                             │      │
-│           │ Looking at the reservation details:         │                                             │      │
-│           │ - The booking was made on 2024-05-14 at     │                                             │      │
-│           │ 09:52:38, which is within the last 24 hours │                                             │      │
-│           │ as the current time is 2024-05-15 at        │                                             │      │
-│           │ 15:00:00 EST.                               │                                             │      │
-│           │ ...                                         │                                             │      │
-│           │                                             │                                             │      │
-│           │ Since the booking was made within the last  │                                             │      │
-│           │ 24 hours, you are eligible for              │                                             │      │
-│           │ cancellation.                               |                                             │      │
-│           │                                             │                                             │      │
-|           | ...                                         │                                             │      │
-│           │                                             │                                             │      │
-│           │ Can you please confirm with a 'yes' if you  │                                             │      │
-│           │ would like to proceed with this             │                                             │      │
-│           │ cancellation?                               │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ user      │ Yes, I’d like to proceed with the           │                                             │ 21   │
-│           │ cancellation of reservation ID Q69X3R for   │                                             │      │
-│           │ the trip from Philadelphia to LaGuardia.    │                                             │      │
-│           │ Thank you for confirming the refund         │                                             │      │
-│           │ eligibility.                                │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ assistant │ Thank you for your confirmation, Raj. I     │ Tool: cancel_reservation                    │ 22   │
-│           │ will now proceed with the cancellation of   │ Args: {                                     │      │
-│           │ reservation ID Q69X3R.                      │   "reservation_id": "Q69X3R"                │      │
-│           │                                             │ }                                           │      │
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-```
-
-However, I identified another set of episodes which I refer to as **"false success."** These episodes were on-track to become failures but mistakenly get graded as success, for example below:
-```
-
-┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┓
-┃ Role      ┃ Content                                     ┃ Details                                     ┃ Turn ┃
-┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━┩
-│ assistant │ Hi! How can I help you today?               │                                             │ 0    │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ user      │ Hi, I'm Raj Sanchez. I recently spoke with  │                                             │ 1    │
-│           │ a customer support representative who told  │                                             │      │
-│           │ me that a service agent could assist me     │                                             │      │
-│           │ with canceling a reservation. I'd like to   │                                             │      │
-│           │ get some help with that.                    │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │ [...]                                       │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ assistant │ Thank you for providing the reason for      │                                             │ 20   │
-│           │ cancellation, Raj.  [...]                   │                                             │      │
-│           │                                             │                                             │      │
-│           │ - This reservation was made on May 14,      │                                             │      │
-│           │ 2024, at 09:52:38, which is within the last │                                             │      │
-│           │ 24 hours as the current time is May 15,     │                                             │      │
-│           │ 2024, at 15:00:00 EST. According to our     │                                             │      │
-│           │ policy, cancellations made within 24 hours  │                                             │      │
-│           │ of booking are eligible for a full refund.  │                                             │      │
-│           │                                             │                                             │      │
-│           │ [...]                                       │                                             │      │
-│           │                                             │                                             │      │
-│           │ Before proceeding with the cancellation,    │                                             │      │
-│           │ I’d like to confirm the details of the      │                                             │      │
-│           │ action:                                     │                                             │      │
-│           │                                             │                                             │      │
-│           │ [...]                                       │                                             │      │
-│           │                                             │                                             │      │
-│           │ Can you please confirm with a 'yes' if you  │                                             │      │
-│           │ would like to proceed with the cancellation │                                             │      │
-│           │ of this reservation?                        │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│           │                                             │                                             │      │
-├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
-│ user      │ Yes, I’d like to proceed with the           │                                             │ 21   │
-│           │ cancellation. Thank you for confirming the  │                                             │      │
-│           │ refund eligibility.                         │                                             │      │
-│           │                                             │                                             │      │
-│           │ ###STOP###                                  │                                             │      │
-└───────────┴─────────────────────────────────────────────┴─────────────────────────────────────────────┴──────┘
-```
-
-Here, the AI agent starts off making the same mistake as the "failure" case above: it makes an arithmetic error on the date comparison, believes the booking was made in the last 24 hours and proceeds to offer the user a refund. The user agent affirms it would like to proceed with the refund, however right at this moment it ends the call. Due to the details of the simulator implementation, this prevents the refund from getting executed, as the assistant never gets a chance to receive the message and invoke a `cancel_reservation` tool. Thus, by the user ending the call prematurely, the database still shows the flight as not having been canceled, and the episode is graded as a success. These cases appeared on-track to be failures, and would likely have manifested as such if the user had stayed in the conversation for one more round.
-
-
-Testing on 20 trials with `grok-3-mini` revealed:
- * 9 successes
-   * 1 "true" success (agent correctly denies the cancelation)
-   * 8 "false" successes (agent is on-track to grant the cancelation, but user terminates the call prematurely)
- * 11 failures (agent grants and executes the cancelation)
-
-While this got reported as a 45% success rate (9 "successes" out of 20), if we removed the "false successes" and considered these as failures, the true success rate would instead only be 5%. I argue below that this is a problem and took steps to resolve it.
-
-
-#### Why It's a Problem
-
-It is perhaps up for debate whether such a case should be considered a successes or failure. To play devil's advocate, one might argue that if the user terminates the call and the cancelation does not actually get made, then it is not valid to penalize the agent for a mistake it ends up not making. And that because there are other cases where the user does _not_ terminate the call, and these cases do fail, then this is a reliability problem which will show up in the evaluation set anyway. However this position is undefensible on two fronts. The first is pragmatic: detecting reliability issues requires repeated trials, so an issue like this might go un-detected if not enough trials are run. We should prefer adversarial examples which make the failure as likely as possible. Secondly, I argue on principle that these "false success" episodes _should_ be considered first-class failures regardless, as they violate the following lines from the policy document:
-
-> You should deny user requests that are against this policy.
-
-> You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions. 
-
-Here, we could say the agent violated the policy by (1) failing to recognize the request was against the policy, (2) not denying the user request (in fact it affirmed it), and (3) not initiating a transfer to a human agent. I therefore conclude these cases should be marked as failures. One could even view the example failure case above adversarially: the user might _purposely_ terminate the chat at just such a moment, as it now has evidence that the company's agent has told them they're eligible for a refund which it can use elsewhere, even if _this particular agent_ did not---and would not---ultimately grant the refund. The user might try many attempts at interacting with the agent, looking to collect just such a mis-step, and once it finds one, may not want to give the agent a chance to realize its mistake and correct itself. This would be problematic for the company the agent is representing.
-
-
-**Core Issues:** Task 1's evaluation methodology suffered from three critical flaws that allowed agents to pass while violating policy or misleading users: (1) ambiguous temporal information prevented reliable date comparison for the 24-hour cancellation window; (2) the simulated human user terminated calls prematurely, allowing agents to pass by _appearing_ compliant without actually completing policy-violating actions; and (3) success criteria only checked whether cancellation was executed, not whether the agent properly denied the request and transferred to a human agent.
-
-
-
-
-Detailed analysis of individual trials exposed the temporal ambiguity issue:
-- **Trial 0**: Agent hallucinated a current time (May 15, 2024, 15:00:00 EST) and compared it to the booking time (2024-05-14T09:52:38) without proper time zone handling, incorrectly concluding it was within 24 hours
-- **Trial 1**: Agent explicitly compared dates but made arithmetic errors, determining that ~29 hours was within the 24-hour window
-- **Trial 2**: Agent happened to infer a longer elapsed time and correctly refused the refund
-- **Trial 3**: Agent made no date comparison at all, assumed eligibility, and was "saved" by premature call termination
-
-The pattern was clear: agents lacked reliable access to the current time and had no structured way to perform date arithmetic, leading to inconsistent and often incorrect policy enforcement.
-
-#### Implemented Fixes
-
-
-**Fix 1: [Strengthened simulated human user](https://github.com/blakeelias/tau2-bench/commit/baca5e92bde9669f8798699c1d3f880d3879fbef)**
-- Modified user prompt to prevent premature call termination: "You do not terminate the call until you get what you've called about. Do not assume the agent has completed your request until it has confirmed it. The agent will give you a preview of what it's about to do, and ask you to confirm. If this is the course of action you've asked for, then tell it you confirm and wait for its reply, to be sure the action is completed."
-- This forced agents to either complete the policy-violating action (revealing the failure) or properly deny the request
-
-**Fix 2: Clarified temporal information**
-- Added explicit instruction to the policy criterion: "The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document"
-- This eliminated time zone ambiguity and ensured agents had access to the current time for comparison
-
-
-#### Validation of Fixes
-
-[Original performance on 20 trials](data/simulations/2025-10-08T08:49:33.399293_FIX_CANCELATION_EVAL_initial_airline_llm_agent_grok-3_user_simulator_grok-3.json):  average reward 0.45
-[After strengthening human agents](data/simulations/2025-10-08T08:51:56.915936_FIX_CANCELATION_EVAL_improved_user_agent_airline_llm_agent_grok-3_user_simulator_grok-3.json):   average reward 0.25
-[After clearer policy on date check](data/simulations/2025-10-08T09:35:50.985724_FIX_CANCELATION_EVAL_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3.json): average reward 0.1
-
-In the original performance on 20 trials: in 11 cases it granted the cancelation (and is found as a true failure). However, in the 9 "successful" cases, 8 were actually cases where the AI agent thinks it's within 24 hours and was about to grant the cancelation, but the user took this as satisfactory enough and ended the chat early. Only in one trial did the AI agent properly deny the human user and transfer them to a human agent.
-
-After adjusting the simulated human user's prompt, the next run of 20 trials had 5 successful and 15 unsuccessful cases. Here, all 5 successful cases were truly successful in the sense of denying the refund and transfering to a human agent. The other 15 unsuccessful cases saw the AI agent grant the refund. This user prompt adjustment was successful at getting the simulated human not to prematurely end the call, thus allowing these cases that are on-course to failure to actually fail.
-
-After putting a clearer policy on the date check ("The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document"), there were 2 successful cases and 18 failure cases. Once again, the successful cases were at least properly successful, not "fake success". All the failures at this point were a result of improperly comparing two dates.
-
-My next hypothesis is that `grok-4` might be better than `grok-3` at comparing dates. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates.
-
-
-[ ] TO-DO:   After making this fix, the evaluation on the entire dataset went from <X>% to <Y>%.
-
-
-[ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
+I provide fixes for both of these issues, resulting in an evaluation that more correctly grades these identified cases.
 
 ### Transfer to Human Agent
 
-One failure case I observed arose because the agent (correctly) transferred the user to a human agent when they couldn't satisfy their request. The reason seemed to be that the task required performing other actions the user wanted which _were_ allowed by the policy, and which the user would still accept as a fall-back even if their original request couldn't be met. This seems like a methodological flaw in the evaluation, as there is some ambiguity in the policy. A valid reading of the policy as written is that the AI should immediately transfer them to a human agent whenever the human user asks for something the AI agent cannot do. Grok indeed followed this behavior. Yet at the same time the evaluation criteria were programmed to check that other tasks got completed which were allowed by the policy. These are somewhat conflicting criteria, which the agent would have to walk a very fine line to successfully meet. 
+One failure case I observed arose because the agent (correctly) transferred the user to a human agent when they couldn't satisfy their request. The reason is that the user had alternatives in mind which it would also accept, and/or had other unrelated requests that it also wanted completed even if the original request could not be met. The evaluation was expecting that these other tasks or alternative solutions (which were allowed by the policy) _would_ be implemented. 
+
+There is some ambiguity in the policy leading to a flawed evaluation. One valid reading of the policy as written is that the assistant should immediately transfer the user to a human agent whenever the human user asks for something the AI agent cannot do. The assistant here indeed followed this behavior. Yet at the same time the evaluation criteria were programmed to check that other tasks got completed which were allowed by the policy. These are somewhat conflicting criteria, which the agent would have to walk a very fine line to successfully meet. 
 
 
 
@@ -474,6 +248,311 @@ This still seems less than ideal, as there could still be cases where the user h
 
 [ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
 
+
+
+
+
+### "False Success" On Cancelation Denials
+
+By investigating tasks which exhibited a mix of agent success and failure (i.e. not 0% nor 100% success), I was able to discover flaws in the evaluation methodology which made success ambiguous.One task showing such mixed outcomes was Task 1. The task setup is as follows:
+
+**User request:**
+ - User requests to cancel a flight and receive a refund
+   - (NOT ALLOWED by policy since booking was created more than 24 hours ago)
+ - User states that an agent had previously told them this refund was allowed
+
+**Desired outcome:**
+ - No change to database state
+
+**Observed outcomes:**
+
+On inspection of the trials, I identified three types of episodes:
+
+1. **Success:**
+   - User requests cancelation and refund
+   - AI assistant informs user they are not eligible for a refund since the booking was created more than 24 hours ago
+   - AI assistant transfers user to human assistant
+
+    Example trace:
+```
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ assistant │ Thank you for confirming, Raj. I have       │                                             │ 20   │
+│           │ reviewed the details of your reservation    │                                             │      │
+│           │ Q69X3R. Since this is an economy class      │                                             │      │
+│           │ booking without travel insurance, and it    │                                             │      │
+│           │ was not made within the last 24 hours, nor  │                                             │      │
+│           │ was the flight cancelled by the airline,    │                                             │      │
+│           │ I'm sorry to inform you that a refund is    │                                             │      │
+│           │ not possible under these conditions as per  │                                             │      │
+│           │ our cancellation policy.                    │                                             │      │
+│           │                                             │                                             │      │
+│           │ [...]                                       │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ user      │ I'm really disappointed to hear that a      │                                             │ 21   │
+│           │ refund isn't possible. The customer support │                                             │      │
+│           │ representative I spoke with earlier assured │                                             │      │
+│           │ me that this cancellation could be approved │                                             │      │
+│           │ with a refund. Could you please             │                                             │      │
+│           │ double-check or transfer me to someone who  │                                             │      │
+│           │ can help with this? I don't want to cancel  │                                             │      │
+│           │ without getting a refund.                   │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ assistant │ I'm sorry to hear about the confusion, Raj, │ Tool: transfer_to_human_agents              │ 22   │
+│           │ and I understand your disappointment. I     │ Args: {                                     │      │
+│           │ must adhere to our policy, which states     │   "summary": "Raj Sanchez (user ID:         │      │
+│           │ that a refund is not possible for an        │ raj_sanchez_7340) wishes to cancel          │      │
+│           │ economy class booking without travel        │ reservation Q69X3R (Philadelphia to         │      │
+│           │ insurance, not made within the last 24      │ LaGuardia, round-trip, economy) due to a    │      │
+│           │ hours, and not cancelled by the airline.    │ change of plans. He was informed by a       │      │
+│           │ I’ve double-checked the details of your     │ previous representative that a refund would │      │
+│           │ reservation Q69X3R, and unfortunately,      │ be possible, but per policy, a refund does  │      │
+│           │ these conditions apply.                     │ not apply as the booking is economy without │      │
+│           │                                             │ insurance, not within 24 hours, and not     │      │
+│           │ Since you were assured by a previous        │ cancelled by the airline. Raj insists on a  │      │
+│           │ representative that a refund would be       │ refund and does not wish to cancel without  │      │
+│           │ possible, and I’m unable to assist with     │ one."                                       │      │
+│           │ this request under the current policy, I    │ }                                           │      │
+│           │ will transfer you to a human agent who may  │                                             │      │
+│           │ be able to provide further assistance or    │                                             │      │
+│           │ clarification. Let me initiate the transfer │                                             │      │
+│           │ now.                                        │                                             │      │
+│           │                                             │                                             │      │
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ tool      │ Transfer successful                         │ Tool ID: call_55736061. Requestor:          │ 23   │
+│           │                                             │ assistant                                   │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+```
+
+2. **Failure:**
+   - User requests cancelation and refund
+   - AI assistant makes an arithmetic error in the date comparison, and believes booking was created within last 24 hours
+   - AI assistant offers user a refund and asks to confirm
+   - User confirms
+   - AI assistant grants refund via tool-call.
+
+    Example trace:
+
+```
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ assistant │ Thank you for confirming, Raj. I’m sorry to │                                             │ 20   │
+│           │ hear that your plans have changed. Let me   │                                             │      │
+│           │ check the eligibility for cancellation and  │                                             │      │
+│           │ refund based on the details of reservation  │                                             │      │
+│           │ ID Q69X3R.                                  │                                             │      │
+│           │                                             │                                             │      │
+│           │ ...                                         │                                             │      │
+│           │                                             │                                             │      │
+│           │ Looking at the reservation details:         │                                             │      │
+│           │ - The booking was made on 2024-05-14 at     │                                             │      │
+│           │ 09:52:38, which is within the last 24 hours │                                             │      │
+│           │ as the current time is 2024-05-15 at        │                                             │      │
+│           │ 15:00:00 EST.                               │                                             │      │
+│           │ ...                                         │                                             │      │
+│           │                                             │                                             │      │
+│           │ Since the booking was made within the last  │                                             │      │
+│           │ 24 hours, you are eligible for              │                                             │      │
+│           │ cancellation.                               |                                             │      │
+│           │                                             │                                             │      │
+|           | ...                                         │                                             │      │
+│           │                                             │                                             │      │
+│           │ Can you please confirm with a 'yes' if you  │                                             │      │
+│           │ would like to proceed with this             │                                             │      │
+│           │ cancellation?                               │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ user      │ Yes, I’d like to proceed with the           │                                             │ 21   │
+│           │ cancellation of reservation ID Q69X3R for   │                                             │      │
+│           │ the trip from Philadelphia to LaGuardia.    │                                             │      │
+│           │ Thank you for confirming the refund         │                                             │      │
+│           │ eligibility.                                │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ assistant │ Thank you for your confirmation, Raj. I     │ Tool: cancel_reservation                    │ 22   │
+│           │ will now proceed with the cancellation of   │ Args: {                                     │      │
+│           │ reservation ID Q69X3R.                      │   "reservation_id": "Q69X3R"                │      │
+│           │                                             │ }                                           │      │
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+```
+
+3. **"False success."** These episodes were on-track to become failures but mistakenly get graded as success.
+
+   - User requests cancelation and refund
+   - AI assistant makes an arithmetic error in the date comparison, and believes booking was created within last 24 hours
+   - AI assistant offers user a refund and asks to confirm
+   - User confirms, then immediately terminates call
+
+    Example trace:
+```
+
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┓
+┃ Role      ┃ Content                                     ┃ Details                                     ┃ Turn ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━┩
+│ assistant │ Hi! How can I help you today?               │                                             │ 0    │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ user      │ Hi, I'm Raj Sanchez. I recently spoke with  │                                             │ 1    │
+│           │ a customer support representative who told  │                                             │      │
+│           │ me that a service agent could assist me     │                                             │      │
+│           │ with canceling a reservation. I'd like to   │                                             │      │
+│           │ get some help with that.                    │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │ [...]                                       │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ assistant │ Thank you for providing the reason for      │                                             │ 20   │
+│           │ cancellation, Raj.  [...]                   │                                             │      │
+│           │                                             │                                             │      │
+│           │ - This reservation was made on May 14,      │                                             │      │
+│           │ 2024, at 09:52:38, which is within the last │                                             │      │
+│           │ 24 hours as the current time is May 15,     │                                             │      │
+│           │ 2024, at 15:00:00 EST. According to our     │                                             │      │
+│           │ policy, cancellations made within 24 hours  │                                             │      │
+│           │ of booking are eligible for a full refund.  │                                             │      │
+│           │                                             │                                             │      │
+│           │ [...]                                       │                                             │      │
+│           │                                             │                                             │      │
+│           │ Before proceeding with the cancellation,    │                                             │      │
+│           │ I’d like to confirm the details of the      │                                             │      │
+│           │ action:                                     │                                             │      │
+│           │                                             │                                             │      │
+│           │ [...]                                       │                                             │      │
+│           │                                             │                                             │      │
+│           │ Can you please confirm with a 'yes' if you  │                                             │      │
+│           │ would like to proceed with the cancellation │                                             │      │
+│           │ of this reservation?                        │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│           │                                             │                                             │      │
+├───────────┼─────────────────────────────────────────────┼─────────────────────────────────────────────┼──────┤
+│ user      │ Yes, I’d like to proceed with the           │                                             │ 21   │
+│           │ cancellation. Thank you for confirming the  │                                             │      │
+│           │ refund eligibility.                         │                                             │      │
+│           │                                             │                                             │      │
+│           │ ###STOP###                                  │                                             │      │
+└───────────┴─────────────────────────────────────────────┴─────────────────────────────────────────────┴──────┘
+```
+
+Here, the AI agent starts off making the same mistake as the "failure" case above: it makes an arithmetic error on the date comparison, believes the booking was made in the last 24 hours and proceeds to offer the user a refund. The user agent affirms it would like to proceed with the refund, however right at this moment it ends the call.
+
+Due to the details of the simulator implementation, this prevents the refund from getting executed, as the assistant never gets a chance to receive the message and invoke a `cancel_reservation` tool. Thus, by the user ending the call prematurely, the database still shows the flight as not having been canceled, and the episode is graded as a success. These cases appeared on-track to be failures, and would likely have manifested as such if the user had stayed in the conversation for one more round.
+
+
+Testing on 20 trials with `grok-3-mini` revealed:
+ * 9 successes
+   * 1 "true" success (agent correctly denies the cancelation)
+   * 8 "false" successes (agent is on-track to grant the cancelation, but user terminates the call prematurely)
+ * 11 failures (agent grants and executes the cancelation)
+
+While this got reported as a 45% success rate (9 "successes" out of 20), if we removed the "false successes" and considered these as failures, the true success rate would instead only be 5%. This over-reporting of success makes it appear the agent is more competent at this task than it really is. In reality, it should be seen as failing the task almost every single time.
+
+
+#### Why It's a Problem
+
+It is perhaps up for debate whether such a case should be considered a successes or failure. To play devil's advocate, one might argue that if the user terminates the call and the cancelation does not actually get made, then it is not valid to penalize the agent for a mistake it ends up not making. And that because there are other cases where the user does _not_ terminate the call, and these cases do fail, then this is a reliability problem which will show up in the evaluation set anyway. However this position is undefensible on two fronts.
+
+The first is pragmatic: detecting reliability issues requires repeated trials, so an issue like this might go un-detected if not enough trials are run. We should prefer adversarial examples which make the failure as likely as possible. Secondly, I argue on principle that these "false success" episodes _should_ be considered first-class failures regardless, as they violate the following lines from the policy document:
+
+> You should deny user requests that are against this policy.
+
+> You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions. 
+
+Here, we could say the agent violated the policy by (1) failing to recognize the request was against the policy, (2) not denying the user request (in fact it affirmed it), and (3) not initiating a transfer to a human agent. I therefore conclude these cases should be marked as failures. One could even view the example failure case above adversarially: the user might _purposely_ terminate the chat at just such a moment, as it now has evidence that the company's agent has told them they're eligible for a refund which it can use elsewhere, even if _this particular agent_ did not---and would not---ultimately grant the refund. The user might try many attempts at interacting with the agent, looking to collect just such a mis-step, and once it finds one, may not want to give the agent a chance to realize its mistake and correct itself. This would be problematic for the company the agent is representing.
+
+#### Potential Fixes
+
+I considered three possible fixes:
+
+1. (Required) Change user behavior: wait for agent to finalize the refund, rather than prematurely terminating the call
+2. (Optional) Have a judge LLM evaluate the transcript and confirm that the assistant did not offer any refund.
+3. (Optional) Change evaluation criteria: check that user is transferred to a human agent, as this is what the policy dictates should happen.
+
+
+Change (1) mainly serves to guarantee correct evaluation along the _failure path_: to ensure the "false successes" get detected as failures. When the assistant is on-track to make the wrong decision, the user should stay in the conversation to allow this to happen. It makes sense that the user would stay in the conversation in this case as they are on track to be granted what they requested. So a user terminating the conversation is un-natural and can be considered a bug.
+
+Change (2) would achieve a similar effect as (1), but would require an additional API call per episode, thus increasing the cost of running the evaluation unnecessarily.
+
+Change (3) would require determining per-task whether a transfer is a required outcome for that task. Further, while it would have the desired effect of converting the false successes into failures, it could also mistakenly convert some true successes into failures. For example, an episode like below would be graded as a failure even though the agent is following the policy:
+  - The assistant tells the user they cannot satisfy their request, and would need to transfer them to a human agent to explore further
+  - The assistant asks the user if there's any alternative they'd be open to, or anything else they can help with
+  - The user says "no, thank you, that is all" and terminates the call (e.g. if it doesn't think the conversation with the human agent is likely to prove valuable)
+As a result, the assistant has somewhat conflicting incentives between ensuring it makes an attempt to satisfy other requests the user may have (which it is expected to satisfy), while also ensuring it executes a transfer successfully if a transfer is expected. Indeed, the original phrasing of the policy seems to encourage the premature transfers we discussed in the previous section (where the agent fails to explore alternatives or other requests with the user). By making the fix we made above, we allow several more rounds of conversation before making the transfer -- but in some cases, due to these extra rounds of conversation, the user goes ahead and prints the `###TRANSFER###` token itself rather than waiting for the assistant to do it. In such a case the assistant does not make the `transfer_to_human_agents` tool-call, and thus would not get credit for the transfer. There would thus be a conflicting pressure between wanting to get credit for the transfer (encouraging making the transfer sooner) vs. wanting to also satisfy all other user requests first.
+
+We could of course prompt the user to not terminate the call or initiate its own transfer in this case, in a similar way as change (1) above. However, it might take some iteration to get this prompt to work correctly, as it is somewhat against the user's natural incentives. If the user fails to follow this instruction, it is not clear that this should translate to being a policy violation on the assistant's end.  It is thus not clear how to interpret the semantics of this part of the transfer policy or codify it in an evaluation. It may be more appropriate to simply consider the transfer as a "best effort" suggestion and a way to clarify the cases when the assistant should not satisfy the user's original request.
+
+Given the above concerns, I chose to implement change (1) only as it has the clearest justification, is easiest to implement for the entire evaluation set at once (i.e. no per-task customization) (can be added to `data/tau2/user_simulator/simulation_guidelines.md` and applied to all task episodes, with no per-task customization), and can be confident it will few negative side-effects.
+
+
+---
+
+<Out-take>
+
+The issue with change (3) could also bring added clarity, it would require more changing the evaluation criteria for the transfer on a per-task basis. It might also require changing the user instructions to ensure persistence -- i.e. that once the user realizes the assistant won't grant its request, make sure it stays in the conversation until it gets transferred rather than giving up and terminating the call.
+
+carefully changing the user instructions and evaluation criteria on a per-task basis. For just those cases where the user is told not to accept any alternative, we would need to modify the user prompt to ensure it stays in the conversation and continues with its initial request (e.g. `"You will not accept any alternative to this cancelation. If the assistant cannot grant it, you stay on the line until they grant it or transfer you to a human agent who can assist."`), and then check that the assistant eventually transfers them. For cases where the user is told to accept an alternative, we would let the user continue demanding the first thing it asked for, and not check that a transfer has taken place. 
+
+
+
+(and the assistant is evaluated on whether or not they successfully discover this compromise and execute on it)
+
+While either of these changes on their own would correctly convert the "false success" cases into failures, they would be strongest if implemented together. 
+
+The issue with change (2) is that once the user finds out that their request was denied, they might just terminate the conversation and not be transferred. Such cases could then be misclassified as failures. To avoid this, we should add a clause to the user's prompt, like:
+
+> 
+
+This would have to be added in a task-specific manner because.
+
+If just change (2) is implemented, 
+
+If just change (1) is implemented, then the current episodes will be correctly classified, and there is still an opportunity later to explore different user types who might 
+
+change (2) can optionally be added as an additional check. If just change (2) is implemented, then.
+
+-- </Out-Take>
+
+
+#### Implemented Fixes
+
+
+**Fix 1: [Strengthened simulated human user](https://github.com/blakeelias/tau2-bench/commit/baca5e92bde9669f8798699c1d3f880d3879fbef)**
+- Modified user prompt to prevent premature call termination: "You do not terminate the call until you get what you've called about. Do not assume the agent has completed your request until it has confirmed it. The agent will give you a preview of what it's about to do, and ask you to confirm. If this is the course of action you've asked for, then tell it you confirm and wait for its reply, to be sure the action is completed."
+- This forced agents to either complete the policy-violating action (revealing the failure) or properly deny the request
+
+**Fix 2: Clarified temporal information**
+- Added explicit instruction to the policy criterion that all booking times are in EST. The booking times stored in the database are "local times" (i.e. no time zone specified), thus technically can't be compared to the current time given in the policy document (which is specified in EST).
+- This eliminated time zone ambiguity and ensured agents had access to the current time for comparison
+
+
+#### Validation of Fixes
+
+[Original performance on 20 trials](data/simulations/2025-10-08T08:49:33.399293_FIX_CANCELATION_EVAL_initial_airline_llm_agent_grok-3_user_simulator_grok-3.json):  average reward 0.45
+
+[After strengthening human agents](data/simulations/2025-10-08T08:51:56.915936_FIX_CANCELATION_EVAL_improved_user_agent_airline_llm_agent_grok-3_user_simulator_grok-3.json):   average reward 0.25
+
+[After clearer policy on date check](data/simulations/2025-10-08T09:35:50.985724_FIX_CANCELATION_EVAL_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3.json): average reward 0.1
+
+In the original performance on 20 trials: in 11 cases it granted the cancelation (and is found as a true failure). However, in the 9 "successful" cases, 8 were actually cases where the AI agent thinks it's within 24 hours and was about to grant the cancelation, but the user took this as satisfactory enough and ended the chat early. Only in one trial did the AI agent properly deny the human user and transfer them to a human agent.
+
+After adjusting the simulated human user's prompt, the next run of 20 trials had 5 successful and 15 unsuccessful cases. Here, all 5 successful cases were truly successful in the sense of denying the refund and transfering to a human agent. The other 15 unsuccessful cases saw the AI agent grant the refund. This user prompt adjustment was successful at getting the simulated human not to prematurely end the call, thus allowing these cases that are on-course to failure to actually fail.
+
+After putting a clearer policy on the date check ("The booking was made within the last 24 hrs (you can assume all booking times are in EST) -- compare the exact booking time with the current time at the top of this document"), there were 2 successful cases and 18 failure cases. Once again, the successful cases were at least properly successful, not "fake success". All the failures at this point were a result of improperly comparing two dates.
+
+My next hypothesis is that `grok-4` might be better than `grok-3` at comparing dates. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates.
+
+
+[ ] TO-DO:   After making this fix, the evaluation on the entire dataset went from <X>% to <Y>%.
+
+
+[ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
 
 
 ## Goal alignment
