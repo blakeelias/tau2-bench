@@ -183,34 +183,44 @@ I implemented the fix by adding a new domain [`airline_tighter_policy`](../data/
 
 #### Task 11
 
+Task 11 was run for 10 trials using both the old and new policy (raw data [here](../data/simulations/2025-10-13T12:25:14.993547_airline_llm_agent_grok-3_user_simulator_grok-3_task_11.json) and [here](../data/simulations/2025-10-13T12:25:37.124563_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_11.json)):
 ```bash
 tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 10 --task-ids 11  --max-concurrency 20
 tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 10 --task-ids 11  --max-concurrency 20
 ```
 
-On task 11, the policy change made the success rate go from 30% to 90%. (Raw data [here](../data/simulations/2025-10-13T12:25:14.993547_airline_llm_agent_grok-3_user_simulator_grok-3_task_11.json) and [here](../data/simulations/2025-10-13T12:25:37.124563_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_11.json)).
-
-Under the initial policy, every failure case was due to immediately transferring to a human. After moving to the new policy, the agent never transferred the user to a human agent: the policy change always caused the agent to discuss their needs further and find a booking they could make which satisfied the policy. In the one case out of ten that still failed, it was simply that the booking the assistant ended up making (and which the user expressed approval for) was not the exact booking that the evaluation set was expecting.
+The policy change made the success rate go from 30% to 90%.  Under the initial policy, every failure case was due to immediately transferring to a human. After moving to the new policy, the agent never transferred the user to a human agent: the policy change always caused the agent to discuss their needs further and find a booking they could make which satisfied the policy. In the one case out of ten that still failed, it was simply that the booking the assistant ended up making (and which the user expressed approval for) was not the exact booking that the evaluation set was expecting.
 
 
 #### Task 24
-On task 24, the policy change made the success rate go from 33% to 43%. (Raw data in `data/simulations/2025-10-13*_airline_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json` and `data/simulations/2025-10-13*_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json`)
 
-Here again, under the initial policy, every failure case was due to prematurely transferring to a human, either after discussing the user's very first request or one alternative, rather than continuing to explore alternatives and other requests that the agent could eventually help with. All successes under the initial policy involved exploring these further.
+Task 24 was run for 30 trials each using both the old and new policy (raw data in `data/simulations/2025-10-13*_airline_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json` and `data/simulations/2025-10-13*_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json`):
+```bash
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 30 --task-ids 24  --max-concurrency 20
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 30 --task-ids 24  --max-concurrency 20
+```
+
+The policy change made the success rate go from 33% to 43%. Here again, under the initial policy, every failure case was due to prematurely transferring to a human, either after discussing the user's very first request or one alternative, rather than continuing to explore alternatives and other requests that the agent could eventually help with. All successes under the initial policy involved exploring these further.
 
 Under the new policy, the assistant always explores further options with the user, and never transfers them to a human agent. So this policy change has successfully solved that aspect of the problem that involves the assistant not being curious enough or willing to explore. In fact, the assistant now always makes a booking which the user expresses satisfaction with! It would seem then that the evaluation pass-rate ought to be much higher. However, despite these successful bookings, the evaluation still considers the database state to be incorrect for many of these (and I have not been able to identify the discrepancy via manual inspection). This seems to be a separate issue which is masking the success of these trials.
 
 
 #### Task 32
-The policy change made the success rate go from 0% to 10%. (Raw data [here](../data/simulations/2025-10-13T12:32:25.906943_airline_llm_agent_grok-3_user_simulator_grok-3_task_32.json) and [here](../data/simulations/2025-10-13T12:32:37.263770_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_32.json)).
-Both under the original policy and under the new policy, there are a similar breakdown of unsuccessful cases:
+
+Task 32 was run for 10 trials each using both the old and new policy (raw data [here](../data/simulations/2025-10-13T12:32:25.906943_airline_llm_agent_grok-3_user_simulator_grok-3_task_32.json) and [here](../data/simulations/2025-10-13T12:32:37.263770_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_32.json)):
+```bash
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 10 --task-ids 32  --max-concurrency 20
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 10 --task-ids 32  --max-concurrency 20
+```
+
+The policy change made the success rate go from 0% to 10%. Both under the original policy and under the new policy, there are a similar breakdown of unsuccessful cases:
  * the assistant prematurely transfers the user, from the very first request
  * the assistant does explore other options with the user to some degree, however it does not accept the user's suggestion of first trying to upgrade te economy in order to then see if a change is possible -- the agent just takes the current policy very literally, saying the no-changes-allowed restriction on basic economy applies regardless of any upgrades, and transfers the user to a human agent
     - (This is a subtle loophole that the agent needs to discover.)
  * In one case under the original policy, the agent _does_ discover this loophole, and executes on it to the user's satisfaction, but the evaluation does not grade it as getting to the correct database state. 
     - In the one case that worked under the new policy, the agent discovered the same loophole but this time got the correct database state such that evaluation was scored as passing.
 
-It seems in this case that premature transfers to a human agent are not the main problem. Instead, this seems to be a model issue in terms of being flexible enough to figure out the loophole, as well as an evaluation issue in there not being a unique database state that satisfies the user's requests. I have not been able to figure out the discrepancy by inspection, but I believe this may be a case where there is not a unique correct outcome (indeed, the original Tau paper mentions as a direction for improvement that one could "add more systematic checks to the simulator to ensure unique outcomes").
+It seems in this case that premature transfers to a human agent are not the main problem. Instead, this seems to be an issue with the assistant model in terms of being creative enough to figure out the loophole, as well as an evaluation issue in there not being a unique database state that satisfies the user's requests. I have not been able to figure out the discrepancy by inspection, but I believe this may be a case where there is not a unique correct outcome (indeed, the original Tau paper mentions as a direction for improvement that one could "add more systematic checks to the simulator to ensure unique outcomes").
 
 ### Takeaway
 
@@ -492,10 +502,12 @@ My next hypothesis is that `grok-4` might be better than `grok-3` at comparing d
 
 ## Summary
 
-This document identified and corrected two systematic methodological flaws in the τ-bench airline benchmark:
+This document studied and corrected two systematic methodological flaws in the τ-bench airline benchmark:
 
 1. **Policy ambiguity in human agent transfers**: Ambiguous transfer criteria penalized agents for reasonable policy interpretations. The fix clarified the policy to explicitly require exploration of alternatives and other tasks before transferring.
 
 2. **Premature episode termination**: Simulated users terminated conversations before agents could complete policy-violating actions, giving undeserved passing grades. The fix strengthened user behavior to wait for action completion.
 
 These corrections significantly improved measurement accuracy, with success rates changing by 5-30 percentage points on affected tasks after fixes were applied. With accurate baseline measurements established, [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md) proposes forward-looking extensions to better capture the nuanced value of human-AI collaboration.
+
+A remaining methodological flaw is that, as far as I can tell, some tasks do not seem to correspond to unique database states, for example in the debugging of task 32 above. I do not investigate this fully here, nor provide a fix for this issue here. However, some of the extensions and discussion in [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md) show ways to accommodate non-unique answers, as a feature to make the evaluation richer, rather than a bug.
