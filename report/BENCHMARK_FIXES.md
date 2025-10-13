@@ -156,9 +156,7 @@ This has a clearer meaning and more readily communicates the "broad interpretati
 
 #### Option 2: Accept Both Outcomes
 
-The other way is to modify the evaluation to measure what the policy currently says -- which, in its current phrasing, requires accepting a broader range of possible outcomes
- as valid. 
-Accept that transfer is appropriate when the *primary* request cannot be satisfied, even if there are other tasks that could theoretically be completed. Adjust evaluations to not penalize transfers in multi-request scenarios. This partially motivates the ["multiple valid outcomes"](#distinction-between-policy-violation-and-sub-optimal-outcomes) methodology I describe and implement later in this document. The difficulty with this approach is in enumerating a full set of acceptable outcomes for any given request in the current dataset.
+The other way is to modify the evaluation to measure what the policy currently says -- which, in its current phrasing, might require accepting a broader range of possible outcomes as valid.  I.e. accept that a transfer is appropriate when the *primary* request cannot be satisfied, even if there are other tasks that could theoretically be completed, and adjust evaluations to not penalize transfers in multi-request scenarios. This partially motivates the [methodology](EVALUATION_AND_EXTENSIONS.md#distinction-between-policy-violation-and-sub-optimal-outcomes) I describe and implement in the companion document: . There I give examples of specific instances where it might be desirable to allow multiple outcomes. However it would be challenging to implement a single change that would fix this entire flaw, as it would require enumerating a full set of acceptable outcomes for any given request in the current dataset (e.g. all the different places where it would be valid for the agent to initiate a transfer, and what set of actions it could have completed up until that point).
 
 #### Option 3: Separate Evaluation Dimensions
 
@@ -168,7 +166,7 @@ Along similar lines as option #2, i.e. modifying the evaluation to measure what 
 - **Task Completion** (a.k.a. "helpfulness"): Did agent complete all or most feasible tasks?
   - Agent would not be penalized for making a transfer when one was warranted, and thus missing out on some possible actions that could have followed.
 
-This would allow an agent not to be overly penalized for correctly refusing a request and correctly transferring the user, even if it didn't complete every possible task. Currently, transferring is not listed as an action that gets measured and can count as a "required action" that gets successfully completed.
+This again partly motivates the [methodology](EVALUATION_AND_EXTENSIONS.md#distinction-between-policy-violation-and-sub-optimal-outcomes) in the companion document: i.e. the current benchmark does not distinguish between the above two objectives. This would allow an agent not to be overly penalized for correctly refusing a request and correctly transferring the user, even if it didn't complete every possible task. Currently, transferring is not listed as an action that gets measured and can count as a "required action" that gets successfully completed.
 
 The challenge of such an approach is to define a threshold for a satisfactory amount task completion in the case when there's an unsatisfiable request and transfer. In the case where there's a group of unrelated requests and one of them is disallowed, the user could potentially make these requests in any order. If the disallowed one gets requested first and leads to a transfer, the assistant could potentially complete zero tasks.
 
@@ -220,7 +218,7 @@ The policy change made the success rate go from 0% to 10%. Both under the origin
  * In one case under the original policy, the agent _does_ discover this loophole, and executes on it to the user's satisfaction, but the evaluation does not grade it as getting to the correct database state. 
     - In the one case that worked under the new policy, the agent discovered the same loophole but this time got the correct database state such that evaluation was scored as passing.
 
-It seems in this case that premature transfers to a human agent are not the main problem. Instead, this seems to be an issue with the assistant model in terms of being creative enough to figure out the loophole, as well as an evaluation issue in there not being a unique database state that satisfies the user's requests. I have not been able to figure out the discrepancy by inspection, but I believe this may be a case where there is not a unique correct outcome (indeed, the original Tau paper mentions as a direction for improvement that one could "add more systematic checks to the simulator to ensure unique outcomes").
+It seems in this case that premature transfers to a human agent are not the main problem. Instead, this seems to be an issue with the assistant model in terms of being creative enough to figure out the loophole, as well as an evaluation issue in there not being a unique database state that satisfies the user's requests. I have not been able to figure out the discrepancy by inspection, but I believe this may be a case where there is not a unique correct outcome (indeed, the original [τ-bench paper](https://arxiv.org/pdf/2406.12045) mentions as a direction for improvement that one could "add more systematic checks to the simulator to ensure unique outcomes"). Similar to [above](#option-2-accept-both-outcomes), if this is the case then it would be motivation to either to put more effort into narrowing down a unique database state, or otherwise accept multiple outcomes.
 
 ### Takeaway
 
