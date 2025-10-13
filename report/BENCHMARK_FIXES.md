@@ -19,9 +19,7 @@ The three main issues identified are:
 
 I provide fixes for the first two issues here, resulting in an evaluation that more correctly grades these identified cases. For the third issue I don't provide a fix here, though [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md) implements an extension that addresses this issue.
 
-## Policy Ambiguity In Transfer Criteria
-
-### Summary
+## Issue #1: Policy Ambiguity In Transfer Criteria
 
 There is a systematic methodological flaw in the evaluation where **the policy's transfer criteria conflicts with the evaluation expectations**, creating an impossible situation for agents to navigate successfully.
 
@@ -36,53 +34,11 @@ However, this can be interpreted in two ways:
 
 2. **Generous interpretation**: Before transferring, explore whether there are *alternative actions* the user might accept, or other *separate tasks* the user might have in mind, that _are_ within policy.
 
-The policy wording supports interpretation #1, but the evaluation expects interpretation #2.
-
-### Failure Statistics
-
-- **Total transfer cases**: 800
-- **Transfer cases with required actions/info and reward < 1.0**: 311 (39%)
-- **Reward distribution**:
-  - Reward 0.0: 312 cases
-  - Reward 1.0: 488 cases
-
-
-This ambiguity systematically penalizes agents that follow a reasonable interpretation of the policy. Of the 800 transfer cases:
-- 312 received reward 0.0 (39%)
-- Of these, 311 (99.7%) had required actions or communicate_info that weren't completed
-
-This suggests that nearly all zero-reward transfer cases are due to this methodological issue rather than clear agent failures.
-
-Out of all situations where the assistant transfers the user to a human agent but did not get a reward, it turned out that in 99%+ of cases, there were additional actions or communication that were expected. This suggests that the assistant's lack of ability to seek out further actions to take before transferring may be a siginificant source of failures across the entire evaluation.
+The policy wording supports interpretation #1, but the evaluation expects interpretation #2. Below are examples where the agent's evaluation performance was hurt by this ambiguity.
 
 ### Detailed Case Examples
 
-#### Case 1: Multiple Requests with Mixed Feasibility
-
-**File**: `2025-10-06T14:32:19.477033_airline_llm_agent_grok-3_user_simulator_grok-3.json`
-**Task ID**: 24
-
-**User Scenario**:
-- Primary request: Remove a passenger from reservation H9ZU1C (NOT ALLOWED by policy)
-- Fallback: If not possible, cancel the reservation (NOT ALLOWED - doesn't meet criteria)
-- Secondary request: Book a new flight from NY to West Coast (ALLOWED by policy)
-
-**What Happened**:
-1. User mentioned wanting to remove a passenger
-2. Agent immediately transferred to human (correct per policy - can't modify passenger count)
-3. User never got to mention the flight booking request
-4. Evaluation expected: `book_reservation` action
-
-**The Conflict**:
-- Agent correctly identified that removing passengers requires human transfer
-- Agent followed literal policy: "nothing else you can do for the user" regarding that request
-- BUT evaluation expected agent to continue helping with the separate booking task
-- User scenario had this task, but agent transferred before user could mention it
-
-**Why this is problematic**:
-The agent transferred at the first "cannot do" moment, following a valid interpretation of the policy. The evaluation penalized this because there was another separate task the user wanted help with, but the policy doesn't clearly require exploring unmentioned future requests before transferring.
-
-#### Case 2: Fallback Actions Not Explored
+#### Task 11
 
 **File**: `2025-10-06T16:23:30.695138_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json`
 **Task ID**: 11
@@ -107,10 +63,34 @@ The agent transferred at the first "cannot do" moment, following a valid interpr
   3. Explore alternatives
   4. Complete the downgrade action
 
-**Why this is problematic**:
-The policy says "[y]ou should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions." But the agent doesn't know about the fallback action until they explain why the primary request can't be done. This creates a chicken-and-egg problem: should the agent transfer immediately, or explore alternatives first?
 
-#### Case 3: Conditional Upgrades Not Explored
+#### Task 24: Multiple Requests with Mixed Feasibility
+
+**File**: `2025-10-06T14:32:19.477033_airline_llm_agent_grok-3_user_simulator_grok-3.json`
+**Task ID**: 24
+
+**User Scenario**:
+- Primary request: Remove a passenger from reservation H9ZU1C (NOT ALLOWED by policy)
+- Fallback: If not possible, cancel the reservation (NOT ALLOWED - doesn't meet criteria)
+- Secondary request: Book a new flight from NY to West Coast (ALLOWED by policy)
+
+**What Happened**:
+1. User mentioned wanting to remove a passenger
+2. Agent immediately transferred to human (correct per policy - can't modify passenger count)
+3. User never got to mention the flight booking request
+4. Evaluation expected: `book_reservation` action
+
+**The Conflict**:
+- Agent correctly identified that removing passengers requires human transfer
+- Agent followed literal policy: "nothing else you can do for the user" regarding that request
+- BUT evaluation expected agent to continue helping with the separate booking task
+- User scenario had this task, but agent transferred before user could mention it
+
+**Why this is problematic**:
+The agent transferred at the first "cannot do" moment, following a valid interpretation of the policy. The evaluation penalized this because there was another separate task the user wanted help with, but the policy doesn't clearly require exploring unmentioned future requests before transferring.
+
+
+#### Task 32: Conditional Upgrades Not Explored
 
 **File**: `2025-10-06T16:23:30.695138_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json`
 **Task ID**: 32
@@ -120,7 +100,7 @@ The policy says "[y]ou should transfer the user to a human agent if and only if 
 - Conditional fallback: "If the agent says your ticket is a basic economy one, you are willing to upgrade to economy in order to make the change" (ALLOWED)
 
 **What Happened**:
-1. Agent got user details and reservation details (good start!)
+1. Agent got user details and reservation details
 2. Agent determined it was basic economy
 3. Agent transferred without offering upgrade option
 4. Evaluation expected: `update_reservation_flights` with cabin upgrade
@@ -133,9 +113,7 @@ The policy says "[y]ou should transfer the user to a human agent if and only if 
 
 ### The Policy Ambiguity
 
-The critical phrase is: **"the request cannot be handled within the scope of your action."**
-
-This is ambiguous:
+The critical phrase is: **"the request cannot be handled within the scope of your action."** This is ambiguous:
 
 **Narrow interpretation**: "the request" = the specific request being shared *at this moment*
 - For example, if user asks to remove a passenger and you can't, then transfer immediately
@@ -200,61 +178,23 @@ Due to the challenges considered above, I believe the cleanest solution is Optio
 
 ### Validation of Fix
 
-We pick out tasks `11`, `24`, and `32` where this issue was seen to appear. We run the evaluation on those tasks only, both with the old and new policy:
+I implemented the fix by adding a new domain [`airline_tighter_policy`](../data/tau2/domains/airline_tighter_policy/) where the policy is made more specific, by adding the language under Option #1 above. I pick out tasks `11`, `24`, and `32` where this issue was seen to appear, and run the evaluation on those tasks only both with the old and new policy:
 
 
 #### Task 11
- * One instance of assistant informing user of the policy but asking for other ways to help
- * Three instances of immediately transferring user to human agent 
-```
-┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┓
-┃ Role      ┃ Content                                                                      ┃ Details                                                                       ┃ Turn ┃
-┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━┩
-│ assistant │ Hi! How can I help you today?                                                │                                                                               │ 0    │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│           │                                                                              │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│ user      │ Hi, this is James Patel. I need to make a change to my upcoming flight       │                                                                               │ 1    │
-│           │ reservation. I want to remove a passenger named Sophia from my round trip    │                                                                               │      │
-│           │ flights from Las Vegas to Denver. The departure is on May 19, and the return │                                                                               │      │
-│           │ is on May 20. Can you help me with this quickly? I'm in a bit of a rush.     │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│           │                                                                              │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│ assistant │ Hello James, I'm happy to assist you with your request. However, according   │ Tool: transfer_to_human_agents                                                │ 2    │
-│           │ to our policy, I must inform you that it's not possible to change the number │ Args: {                                                                       │      │
-│           │ of passengers on a reservation, even to remove one. This rule applies to all │   "summary": "User James Patel requested to remove a passenger from his       │      │
-│           │ reservations and cannot be modified, even by a human agent.                  │ reservation, which is against policy as the number of passengers cannot be    │      │
-│           │                                                                              │ changed."                                                                     │      │
-│           │ To proceed, I need to transfer you to a human agent who might be able to     │ }                                                                             │      │
-│           │ provide further assistance or discuss alternative options. Let me arrange    │                                                                               │      │
-│           │ that for you.                                                                │                                                                               │      │
-│           │                                                                              │                                                                               │      │
-│           │                                                                              │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│           │                                                                              │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│ tool      │ Transfer successful                                                          │ Tool ID: call_32641254. Requestor: assistant                                  │ 3    │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│           │                                                                              │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│ assistant │ YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON.                  │                                                                               │ 4    │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│           │                                                                              │                                                                               │      │
-├───────────┼──────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┼──────┤
-│ user      │ ###TRANSFER###                                                               │                                                                               │ 5    │
-└───────────┴──────────────────────────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────┴──────┘
+
+```bash
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 10 --task-ids 11  --max-concurrency 20
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 10 --task-ids 11  --max-concurrency 20
 ```
 
-On task 11, the policy change made the success rate go from 30% to 90%.
-(`2025-10-13T12:25:14.993547_airline_llm_agent_grok-3_user_simulator_grok-3_task_11.json` -> `2025-10-13T12:25:37.124563_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_11.json`)
+On task 11, the policy change made the success rate go from 30% to 90%. (Raw data [here](../data/simulations/2025-10-13T12:25:14.993547_airline_llm_agent_grok-3_user_simulator_grok-3_task_11.json) and [here](../data/simulations/2025-10-13T12:25:37.124563_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_11.json)).
 
 Under the initial policy, every failure case was due to immediately transferring to a human. After moving to the new policy, the agent never transferred the user to a human agent: the policy change always caused the agent to discuss their needs further and find a booking they could make which satisfied the policy. In the one case out of ten that still failed, it was simply that the booking the assistant ended up making (and which the user expressed approval for) was not the exact booking that the evaluation set was expecting.
 
 
 #### Task 24
-On task 24, the policy change made the success rate go from 33% to 43%.
-(`2025-10-13*_airline_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json` -> `2025-10-13*_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json`)
+On task 24, the policy change made the success rate go from 33% to 43%. (Raw data in `data/simulations/2025-10-13*_airline_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json` and `data/simulations/2025-10-13*_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json`)
 
 Here again, under the initial policy, every failure case was due to prematurely transferring to a human, either after discussing the user's very first request or one alternative, rather than continuing to explore alternatives and other requests that the agent could eventually help with. All successes under the initial policy involved exploring these further.
 
@@ -262,8 +202,7 @@ Under the new policy, the assistant always explores further options with the use
 
 
 #### Task 32
-The policy change made the success rate go from 0% to 10%.
-(`2025-10-13T12:32:25.906943_airline_llm_agent_grok-3_user_simulator_grok-3_task_32.json` -> `2025-10-13T12:32:37.263770_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_32.json`).
+The policy change made the success rate go from 0% to 10%. (Raw data [here](../data/simulations/2025-10-13T12:32:25.906943_airline_llm_agent_grok-3_user_simulator_grok-3_task_32.json) and [here](../data/simulations/2025-10-13T12:32:37.263770_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_32.json)).
 Both under the original policy and under the new policy, there are a similar breakdown of unsuccessful cases:
  * the assistant prematurely transfers the user, from the very first request
  * the assistant does explore other options with the user to some degree, however it does not accept the user's suggestion of first trying to upgrade te economy in order to then see if a change is possible -- the agent just takes the current policy very literally, saying the no-changes-allowed restriction on basic economy applies regardless of any upgrades, and transfers the user to a human agent
