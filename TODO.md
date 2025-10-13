@@ -302,6 +302,8 @@ My next hypothesis is that `grok-4` might be better than `grok-3` at comparing d
 
 
 [ ] TO-DO:   After making this fix, the evaluation on the entire dataset went from <X>% to <Y>%.
+
+
 [ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
 
 ### Transfer to Human Agent
@@ -459,6 +461,17 @@ This still seems less than ideal, as there could still be cases where the user h
 
 
 [ ] TO-DO:   After making this fix, the evaluation on the entire dataset went from <X>% to <Y>%.
+
+
+│ 🏆 Average Reward: 0.4650                                                             │
+│                                                                                       │
+│ 📈 Pass^k Metrics:                                                                    │
+│ k=1: 0.465                                                                            │
+│ k=2: 0.367                                                                            │
+│ k=3: 0.335                                                                            │
+│ k=4: 0.320
+
+
 [ ] TO-DO:   Show improvement on a per-task basis -- which tasks now correct
 
 
