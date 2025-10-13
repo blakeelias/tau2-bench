@@ -1,10 +1,16 @@
 
-## Benchmark Critiques
+# Benchmark Methodological Fixes
 
-There are several senses in which the current benchmark methodolgy is flawed. Here I highlight two such issues:
+> **Related document**: For an overview of the Grok evaluation and forward-looking benchmark extensions, see [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md).
 
-  * The policy semantics around when to execute a transfer to a human agent are ambiguous and the evaluation unfairly penalizes the assistant for acting according to one valid interpretation of the policy.
-  * The user's behavior terminates certain episodes prematurely. These episodes were on-track to fail, i.e. the assistant was about to grant a refund that is against the policy. The user, however, terminated the episode before the agent got to confirm and apply these changes, thus giving the assistant a "free pass" --- allowing it to pass evaluation cases that really were on-track to fail.
+## Overview
+
+During evaluation of Grok models on τ-bench, I identified systematic methodological flaws in the benchmark implementation that led to incorrect success/failure assessments. This document details these issues, proposes fixes, validates the corrections, and provides the corrected evaluation results.
+
+The two main issues identified are:
+
+  * **Policy ambiguity in transfer criteria**: The policy semantics around when to execute a transfer to a human agent are ambiguous, and the evaluation unfairly penalizes assistants for acting according to one valid interpretation of the policy.
+  * **Premature episode termination**: The simulated user's behavior terminates certain episodes prematurely. These episodes were on-track to fail (i.e., the assistant was about to grant a refund that is against the policy), but the user terminated the episode before the agent could confirm and apply these changes, giving the assistant a "free pass" and allowing it to pass evaluation cases that should have failed.
 
 I provide fixes for both of these issues, resulting in an evaluation that more correctly grades these identified cases.
 
@@ -652,3 +658,13 @@ After adjusting the simulated human user's prompt, the next run of 20 trials had
 
 
 My next hypothesis is that `grok-4` might be better than `grok-3` at comparing dates. Indeed, when I ran 20 trials with `grok-4`, with agent temperature 0.0 and user temperature 0.1, it indeed has 100% success rate on task 1. In every case, the agent correctly transfers the user to a human agent, and never makes mistakes with comparing dates.
+
+## Summary
+
+This document identified and corrected two systematic methodological flaws in the τ-bench airline benchmark:
+
+1. **Policy ambiguity in human agent transfers**: Ambiguous transfer criteria penalized agents for reasonable policy interpretations. The fix clarified the policy to explicitly require exploration of alternatives and other tasks before transferring.
+
+2. **Premature episode termination**: Simulated users terminated conversations before agents could complete policy-violating actions, giving undeserved passing grades. The fix strengthened user behavior to wait for action completion.
+
+These corrections significantly improved measurement accuracy, with success rates changing by 5-30 percentage points on affected tasks after fixes were applied. With accurate baseline measurements established, [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md) proposes forward-looking extensions to better capture the nuanced value of human-AI collaboration.

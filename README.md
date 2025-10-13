@@ -36,6 +36,14 @@ Domains are:
 
 All the information that an agent developer needs to build an agent for a domain can be accessed through the domain's API docs. See [View domain documentation](#view-domain-documentation) for more details.
 
+### Grok Evaluation and Benchmark Extensions
+
+This repository includes a comprehensive evaluation of xAI Grok models on τ²-bench, along with methodological improvements and benchmark extensions:
+
+- **[report/BENCHMARK_FIXES.md](report/BENCHMARK_FIXES.md)**: Identifies and corrects systematic methodological flaws in the original τ²-bench implementation, including policy ambiguities and evaluation bugs that led to incorrect success/failure assessments.
+
+- **[report/EVALUATION_AND_EXTENSIONS.md](report/EVALUATION_AND_EXTENSIONS.md)**: Provides Grok model evaluation results on τ²-bench and proposes forward-looking extensions to better capture human-AI collaboration value, including continuous reward functions and multiple acceptable outcomes per task.
+
 ## Installation
 
 1. Clone the repository:

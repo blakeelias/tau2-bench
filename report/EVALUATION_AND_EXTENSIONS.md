@@ -2,7 +2,13 @@
 
 ## Introduction
 
-A central goal for AI development is to enable systems that collaborate effectively with humans. This report evaluates Grok’s performance on the τ-bench benchmark, which tests how well an AI assistant can help a user reach an acceptable outcome in a domain that requires long episodes with many rounds of dialogue and tool-use. I identify flaws with the benchmark, and propose several extensions of the scenarios and metrics to capture a richer assessment of the value the agent brings to the human-AI team. I make brief notes on how to improve model performance on both the old and new benchmarks, including both synthetic and human-generated post-training data.
+A central goal for AI development is to enable systems that collaborate effectively with humans. This report evaluates Grok's performance on the τ-bench benchmark, which tests how well an AI assistant can help a user reach an acceptable outcome in a domain that requires long episodes with many rounds of dialogue and tool-use.
+
+This evaluation consists of two complementary components:
+
+1. **Methodological corrections** ([BENCHMARK_FIXES.md](BENCHMARK_FIXES.md)): Before extending the benchmark, I identified and corrected systematic measurement errors in the original τ-bench implementation. These fixes ensure accurate baseline measurements by addressing policy ambiguities and evaluation bugs that led to incorrect success/failure assessments.
+
+2. **Forward-looking extensions** (this document): Building on the corrected baseline, I propose extensions to the benchmark scenarios and metrics to capture a richer assessment of the value an agent brings to human-AI collaboration. I also provide notes on improving model performance through synthetic and human-generated post-training data.
 
 Together, these steps extend τ-bench toward a more realistic measure of human-AI collaboration that navigates ambiguous, latent human preferences, and explores the trade-off between final task success and the efficiency of the communication process.
 
@@ -515,7 +521,15 @@ To expand to a more flexible evaluation metric like the one described earlier, w
 
 ## Discussion
 
-`grok-3-mini` and `grok-4-fast-reasoning` both struggle to make adequate tool calls in complex, multi-turn settings such as the `airline` domain of τ-bench. Nonetheless, some methodological oversights in τ-bench obscure the degree of ability that these models do in fact have. Here I have demonstrated that unclear policies and overly narrow required end-states can sometimes lead to failures which otherwise could easily have been successes. Further, the current binary reward metrics do not distinguish policy-violations from merely "acceptable yet sub-optimal responses", nor do they consider the spectrum of value add that is possible depending on how well the AI agent meets the human user's preferences, and how much human time is taken up due to a potentially inefficient LLM communicator. Here I outline these oversights through several data examples, implement a new task setting, and propose a more nuanced reward function for calculating how much net value the AI agent has added to a human user.
+`grok-3-mini` and `grok-4-fast-reasoning` both struggle to make adequate tool calls in complex, multi-turn settings such as the `airline` domain of τ-bench. However, a comprehensive evaluation requires distinguishing between genuine model limitations and measurement artifacts from benchmark methodology issues.
+
+This work addresses both aspects:
+
+1. **Methodological corrections** ([BENCHMARK_FIXES.md](BENCHMARK_FIXES.md)): I identified and corrected systematic flaws in the original benchmark that led to incorrect assessments. Specifically, ambiguous policy language around human agent transfers and premature episode terminations caused agents to be penalized for reasonable interpretations or given undeserved credit for episodes which should have been failures. These corrections ensure accurate baseline measurements.
+
+2. **Expressiveness limitations**: Beyond measurement accuracy, the current binary reward metrics do not distinguish policy violations from merely "acceptable yet sub-optimal responses", nor do they consider the spectrum of value an agent adds based on how well it meets latent user preferences while minimizing communication overhead. This document proposes extensions—through new task scenarios with multiple acceptable outcomes and a continuous reward function balancing correctness with efficiency—to better capture the nuanced value of human-AI collaboration.
+
+Together, these improvements move τ-bench from a narrow measure of single-outcome achievement toward a richer assessment of collaborative intelligence that accounts for ambiguous preferences, acceptable tradeoffs, and communication costs.
 
 
 ## Related Work
