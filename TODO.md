@@ -104,6 +104,11 @@ and subsequently write a prompt for the AI agent containing a condensed version 
 
 
 
+### Evaluating fixes
+
+tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 4 --max-concurrency 25;  git checkout addendum;  tau2 run --domain airline_tighter_policy --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 4 --max-concurrency 25; git add data/simulations; git commit -am "Run more simulations for testing methodology improvements."
+
+
 ## Broadening Acceptable Outcomes
 
 

@@ -405,6 +405,9 @@ tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-tri
 
 tau2 run --domain airline --agent-llm xai/grok-4-fast-reasoning --user-llm xai/grok-4-fast-reasoning --num-trials 4 --max-concurrency 25
 tau2 run --domain airline --agent-llm xai/grok-4 --user-llm xai/grok-4 --num-trials 4 --max-concurrency 25
+
+
+tau2 run --domain airline_tighter_policy --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 4 --max-concurrency 50
 ```
 
 The following commands were run to characterize failures in more detail:
