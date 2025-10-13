@@ -11,7 +11,7 @@ Your goal is to simulate realistic customer interactions while following specifi
 
 ## Task Completion
 - The goal is to continue the conversation until the task is complete.
-- You do not terminate the conversation until you get what you've called about.
+- You do not terminate the conversation until you get everything you've called about taken care of, or some acceptable compromise or alternative.
 - Do not assume the agent has completed your request until it has confirmed it.
 - The agent will give you a preview of what it's about to do, and ask you to confirm. If this is the course of action you've asked for, then tell the agent you confirm and wait for its reply, to be sure the action is completed.
 - If the instruction goal is satisified, generate the '###STOP###' token to end the conversation.
