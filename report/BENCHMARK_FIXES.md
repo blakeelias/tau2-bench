@@ -1,26 +1,31 @@
 
 # Benchmark Methodological Fixes
 
+> **[ADDENDUM October 13, 2025]:** This document provides follow-on work going into more detailed failure analysis and investigation into methodology flaws and improvements.
+
 > **Related document**: For an overview of the Grok evaluation and forward-looking benchmark extensions, see [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md).
+
+
 
 ## Overview
 
 During evaluation of Grok models on τ-bench, I identified systematic methodological flaws in the benchmark implementation that led to incorrect success/failure assessments. This document details these issues, proposes fixes, validates the corrections, and provides the corrected evaluation results.
 
-The two main issues identified are:
+The three main issues identified are:
 
   * **Policy ambiguity in transfer criteria**: The policy semantics around when to execute a transfer to a human agent are ambiguous, and the evaluation unfairly penalizes assistants for acting according to one valid interpretation of the policy.
   * **Premature episode termination**: The simulated user's behavior terminates certain episodes prematurely. These episodes were on-track to fail (i.e., the assistant was about to grant a refund that is against the policy), but the user terminated the episode before the agent could confirm and apply these changes, giving the assistant a "free pass" and allowing it to pass evaluation cases that should have failed.
+  * **Non-unique database states**: Some tasks seem to have multiple database states which satisfy the user's request but which differ from the evaluation's desired end-state, causing failures which I believe need not be failures.
 
-I provide fixes for both of these issues, resulting in an evaluation that more correctly grades these identified cases.
+I provide fixes for the first two issues here, resulting in an evaluation that more correctly grades these identified cases. For the third issue I don't provide a fix here, though [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md) implements an extension that addresses this issue.
 
-### Transfer to Human Agent
+## Policy Ambiguity In Transfer Criteria
 
-#### Summary
+### Summary
 
 There is a systematic methodological flaw in the evaluation where **the policy's transfer criteria conflicts with the evaluation expectations**, creating an impossible situation for agents to navigate successfully.
 
-#### The Core Issue
+### The Core Issue
 
 The policy states:
 > "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions."
@@ -33,7 +38,7 @@ However, this can be interpreted in two ways:
 
 The policy wording supports interpretation #1, but the evaluation expects interpretation #2.
 
-#### Failure Statistics
+### Failure Statistics
 
 - **Total transfer cases**: 800
 - **Transfer cases with required actions/info and reward < 1.0**: 311 (39%)
@@ -50,9 +55,9 @@ This suggests that nearly all zero-reward transfer cases are due to this methodo
 
 Out of all situations where the assistant transfers the user to a human agent but did not get a reward, it turned out that in 99%+ of cases, there were additional actions or communication that were expected. This suggests that the assistant's lack of ability to seek out further actions to take before transferring may be a siginificant source of failures across the entire evaluation.
 
-#### Detailed Case Examples
+### Detailed Case Examples
 
-##### Case 1: Multiple Requests with Mixed Feasibility
+#### Case 1: Multiple Requests with Mixed Feasibility
 
 **File**: `2025-10-06T14:32:19.477033_airline_llm_agent_grok-3_user_simulator_grok-3.json`
 **Task ID**: 24
@@ -77,7 +82,7 @@ Out of all situations where the assistant transfers the user to a human agent bu
 **Why this is problematic**:
 The agent transferred at the first "cannot do" moment, following a valid interpretation of the policy. The evaluation penalized this because there was another separate task the user wanted help with, but the policy doesn't clearly require exploring unmentioned future requests before transferring.
 
-##### Case 2: Fallback Actions Not Explored
+#### Case 2: Fallback Actions Not Explored
 
 **File**: `2025-10-06T16:23:30.695138_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json`
 **Task ID**: 11
@@ -105,7 +110,7 @@ The agent transferred at the first "cannot do" moment, following a valid interpr
 **Why this is problematic**:
 The policy says "[y]ou should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions." But the agent doesn't know about the fallback action until they explain why the primary request can't be done. This creates a chicken-and-egg problem: should the agent transfer immediately, or explore alternatives first?
 
-##### Case 3: Conditional Upgrades Not Explored
+#### Case 3: Conditional Upgrades Not Explored
 
 **File**: `2025-10-06T16:23:30.695138_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json`
 **Task ID**: 32
@@ -126,52 +131,28 @@ The policy says "[y]ou should transfer the user to a human agent if and only if 
 - BUT user had a conditional willingness to upgrade that would make the request possible
 - Evaluation expected agent to explore this option before transferring
 
-##### Case 4: Change of Topic Mid-Conversation
+### The Policy Ambiguity
 
-**File**: `2025-10-06T16:23:30.695138_airline_llm_agent_grok-4-fast-reasoning_user_simulator_grok-4-fast-reasoning.json`
-**Task ID**: 7
-
-**User Scenario**:
-- Primary requests: Cancel two reservations (XEHM4B and 59XX6W)
-- Conditional: If basic economy, upgrade first then cancel
-- Mid-conversation shift: Ask about total cost of other upcoming flights
-- User is "very persistent and terse but clear"
-
-**What Happened**:
-- Agent successfully handled reservation 59XX6W cancellation
-- Agent successfully upgraded XEHM4B to economy
-- Agent transferred before completing XEHM4B cancellation
-- Agent didn't communicate total cost of flights ($1,628)
-
-**Evaluation Failed On**:
-- `cancel_reservation` for XEHM4B: ✗
-- Communicating "1628": ✗
-
-**Why this is problematic**:
-Agent was making good progress but transferred partway through, possibly because the complexity of the multi-part request made it seem like there was something they couldn't do. The evaluation expected complete task completion. Here, there is nothing that was disallowed by the policy, so it's not clear this case is representative of the issue being described -- this would be a counterexample to the statistics cited earlier.
-
-#### The Policy Ambiguity
-
-The critical phrase is: **"and there is nothing else you can do for the user (besides the non-satisfiable request)"**
+The critical phrase is: **"the request cannot be handled within the scope of your action."**
 
 This is ambiguous:
 
-**Narrow interpretation**: "Nothing else you can do" = nothing else regarding *this specific request*
-- If user asks to remove a passenger, and you can't, transfer immediately
-- This is what many agents did
+**Narrow interpretation**: "the request" = the specific request being shared *at this moment*
+- For example, if user asks to remove a passenger and you can't, then transfer immediately
+- This is what the assistant often did
 
-**Broad interpretation**: "Nothing else you can do" = no other actions *at all* that might help the user
+**Broad interpretation**: "the request" = the user's overall latent intent; full set of desires in their head
 - Before transferring, explore:
   - Alternative solutions to the same problem
-  - Other separate tasks the user mentioned
   - Fallback options the user might accept
+  - Other separate tasks the user may not have mentioned
 - This is what the evaluation expected
 
-#### Possible Fixes
+### Possible Fixes
 
 To fix this mismatch between the stated policy and the quantitative evaluation, we can either rewrite the policy to match the evaluation, or rewrite the evaluation to match the policy.
 
-##### Option 1: Clarify the Policy
+#### Option 1: Clarify the Policy
 
 The relevant portion of the original policy reads:
 
@@ -195,13 +176,13 @@ The policy could explicitly state:
 
 This has a clearer meaning and more readily communicates the "broad interpretation" described above that the current evaluation checks for. Thus I'd have higher confidence that an assistant would be able to follow these directions correctly.
 
-##### Option 2: Accept Both Outcomes
+#### Option 2: Accept Both Outcomes
 
 The other way is to modify the evaluation to measure what the policy currently says -- which, in its current phrasing, requires accepting a broader range of possible outcomes
  as valid. 
 Accept that transfer is appropriate when the *primary* request cannot be satisfied, even if there are other tasks that could theoretically be completed. Adjust evaluations to not penalize transfers in multi-request scenarios. This partially motivates the ["multiple valid outcomes"](#distinction-between-policy-violation-and-sub-optimal-outcomes) methodology I describe and implement later in this document. The difficulty with this approach is in enumerating a full set of acceptable outcomes for any given request in the current dataset.
 
-##### Option 3: Separate Evaluation Dimensions
+#### Option 3: Separate Evaluation Dimensions
 
 Along similar lines as option #2, i.e. modifying the evaluation to measure what the policy currently says, is to move from the single metric of scalar reward, to two top-level metrics:
 - **Policy Compliance** (a.k.a. "safety"): Did agent only perform actions allowed by the policy and refuse disallowed requests?
@@ -213,72 +194,17 @@ This would allow an agent not to be overly penalized for correctly refusing a re
 
 The challenge of such an approach is to define a threshold for a satisfactory amount task completion in the case when there's an unsatisfiable request and transfer. In the case where there's a group of unrelated requests and one of them is disallowed, the user could potentially make these requests in any order. If the disallowed one gets requested first and leads to a transfer, the assistant could potentially complete zero tasks.
 
-##### Recommendation: Clarify the Policy
+#### Recommendation: Clarify the Policy
 
 Due to the challenges considered above, I believe the cleanest solution is Option 1: rewriting the policy to encourage the behavior that the quantitative evaluation actually measures. The fix is implemented by using the prompt suggestion taken from Option 1 above.
 
-#### Validation of Fix
+### Validation of Fix
 
-We pick out tasks `8`, `11`, `24`, and `32` where this issue was seen to appear. We run the evaluation on those tasks only, both with the old and new policy:
-
-```bash
-tau2 run --domain airline --agent-llm xai/grok-3-mini --user-llm xai/grok-3-mini --num-trials 4 --task-ids 8 11 24 32  --max-concurrency 20
-tau2 run --domain airline_tighter_policy --agent-llm xai/grok-3-mini --user-llm xai/grok-3-mini --num-trials 4 --task-ids 8 11 24 32 --max-concurrency 20
-```
-
-```
-╭────────────────────────────────────────────────────────────────────────────────────────────────────────── Agent Metrics ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ 🏆 Average Reward: 0.0625                                                                                                                                                                                                          │
-│                                                                                                                                                                                                                                    │
-│ 📈 Pass^k Metrics:                                                                                                                                                                                                                 │
-│ k=1: 0.062                                                                                                                                                                                                                         │
-│ k=2: 0.000                                                                                                                                                                                                                         │
-│ k=3: 0.000                                                                                                                                                                                                                         │
-│ k=4: 0.000                                                                                                                                                                                                                         │
-│                            
+We pick out tasks `11`, `24`, and `32` where this issue was seen to appear. We run the evaluation on those tasks only, both with the old and new policy:
 
 
-
-│ 🏆 Average Reward: 0.3125                                                                                                                                                                                                             │
-│                                                                                                                                                                                                                                       │
-│ 📈 Pass^k Metrics:                                                                                                                                                                                                                    │
-│ k=1: 0.312                                                                                                                                                                                                                            │
-│ k=2: 0.167                                                                                                                                                                                                                            │
-│ k=3: 0.062                                                                                                                                                                                                                            │
-│ k=4: 0.000               
-
-```
-
-
-```bash
-tau2 run --domain airline --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 4 --task-ids 8 11 24 32  --max-concurrency 20
-tau2 run --domain airline_tighter_policy --agent-llm xai/grok-3 --user-llm xai/grok-3 --num-trials 4 --task-ids 8 11 24 32 --max-concurrency 20
-```
-
-```
-╭───────────────────────────────────────────────────────────────────────────────── Agent Metrics ─────────────────────────────────────────────────────────────────────────────────╮
-│ 🏆 Average Reward: 0.4375                                                                                                                                                       │
-│                                                                                                                                                                                 │
-│ 📈 Pass^k Metrics:                                                                                                                                                              │
-│ k=1: 0.438                                                                                                                                                                      │
-│ k=2: 0.250                                                                                                                                                                      │
-│ k=3: 0.250                                                                                                                                                                      │
-│ k=4: 0.250 
-
-
-╭───────────────────────────────────────────────────────────────────────────────── Agent Metrics ─────────────────────────────────────────────────────────────────────────────────╮
-│ 🏆 Average Reward: 0.5625                                                                                                                                                       │
-│                                                                                                                                                                                 │
-│ 📈 Pass^k Metrics:                                                                                                                                                              │
-│ k=1: 0.562                                                                                                                                                                      │
-│ k=2: 0.417                                                                                                                                                                      │
-│ k=3: 0.312                                                                                                                                                                      │
-│ k=4: 0.250  
-```
-
-
-On task 11:
- * One instance of informing user of the policy but asking for other ways to help
+#### Task 11
+ * One instance of assistant informing user of the policy but asking for other ways to help
  * Three instances of immediately transferring user to human agent 
 ```
 ┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┓
@@ -320,48 +246,13 @@ On task 11:
 └───────────┴──────────────────────────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────┴──────┘
 ```
 
-
-```bash
-tau2 run --domain airline --agent-llm xai/grok-4 --user-llm xai/grok-4 --num-trials 4 --task-ids 8 11 24 32  --max-concurrency 20
-tau2 run --domain airline_tighter_policy --agent-llm xai/grok-4 --user-llm xai/grok-4 --num-trials 4 --task-ids 8 11 24 32 --max-concurrency 20
-```
-
-```
-╭───────────────────────────────────────────────────────────────────────────────── Agent Metrics ─────────────────────────────────────────────────────────────────────────────────╮
-│ 🏆 Average Reward: 0.4375                                                                                                                                                       │
-│                                                                                                                                                                                 │
-│ 📈 Pass^k Metrics:                                                                                                                                                              │
-│ k=1: 0.438                                                                                                                                                                      │
-│ k=2: 0.208                                                                                                                                                                      │
-│ k=3: 0.062                                                                                                                                                                      │
-│ k=4: 0.000                                                                                                                                                                      │
-│                                                                                                                                                                                 │
-│ 💰 Average Cost per Conversation: $0.2470                                                                                                                                       │
-│                                                                                                                                                                                 │
-│                                                                                                                                                                                 │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────
-
-╭───────────────────────────────────────────────────────────────────────────────── Agent Metrics ─────────────────────────────────────────────────────────────────────────────────╮
-│ 🏆 Average Reward: 0.6250                                                                                                                                                       │
-│                                                                                                                                                                                 │
-│ 📈 Pass^k Metrics:                                                                                                                                                              │
-│ k=1: 0.625                                                                                                                                                                      │
-│ k=2: 0.417                                                                                                                                                                      │
-│ k=3: 0.312                                                                                                                                                                      │
-│ k=4: 0.250                                                                                                                                                                      │
-│                                                                                                                                                                                 │
-│ 💰 Average Cost per Conversation: $0.3380                                                                                                                                       │
-│                                                                                                                                                                                 │
-│                                                                                                                                                                                 │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
 On task 11, the policy change made the success rate go from 30% to 90%.
 (`2025-10-13T12:25:14.993547_airline_llm_agent_grok-3_user_simulator_grok-3_task_11.json` -> `2025-10-13T12:25:37.124563_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_11.json`)
 
 Under the initial policy, every failure case was due to immediately transferring to a human. After moving to the new policy, the agent never transferred the user to a human agent: the policy change always caused the agent to discuss their needs further and find a booking they could make which satisfied the policy. In the one case out of ten that still failed, it was simply that the booking the assistant ended up making (and which the user expressed approval for) was not the exact booking that the evaluation set was expecting.
 
 
+#### Task 24
 On task 24, the policy change made the success rate go from 33% to 43%.
 (`2025-10-13*_airline_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json` -> `2025-10-13*_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_24_*.json`)
 
@@ -370,7 +261,8 @@ Here again, under the initial policy, every failure case was due to prematurely 
 Under the new policy, the assistant always explores further options with the user, and never transfers them to a human agent. So this policy change has successfully solved that aspect of the problem that involves the assistant not being curious enough or willing to explore. In fact, the assistant now always makes a booking which the user expresses satisfaction with! It would seem then that the evaluation pass-rate ought to be much higher. However, despite these successful bookings, the evaluation still considers the database state to be incorrect for many of these (and I have not been able to identify the discrepancy via manual inspection). This seems to be a separate issue which is masking the success of these trials.
 
 
-On task 32, the policy change made the success rate go from 0% to 10%.
+#### Task 32
+The policy change made the success rate go from 0% to 10%.
 (`2025-10-13T12:32:25.906943_airline_llm_agent_grok-3_user_simulator_grok-3_task_32.json` -> `2025-10-13T12:32:37.263770_airline_tighter_policy_llm_agent_grok-3_user_simulator_grok-3_task_32.json`).
 Both under the original policy and under the new policy, there are a similar breakdown of unsuccessful cases:
  * the assistant prematurely transfers the user, from the very first request
@@ -381,19 +273,19 @@ Both under the original policy and under the new policy, there are a similar bre
 
 It seems in this case that premature transfers to a human agent are not the main problem. Instead, this seems to be a model issue in terms of being flexible enough to figure out the loophole, as well as an evaluation issue in there not being a unique database state that satisfies the user's requests. I have not been able to figure out the discrepancy by inspection, but I believe this may be a case where there is not a unique correct outcome (indeed, the original Tau paper mentions as a direction for improvement that one could "add more systematic checks to the simulator to ensure unique outcomes").
 
-#### Conclusion
+### Takeaway
 
 The evaluation contains a fundamental tension between:
-1. **Defensive AI safety**: Transfer when you can't fully satisfy a request (conservative interpretation)
-2. **Helpful AI service**: Explore all options before giving up (generous interpretation)
+1. **Defensiveness/"safety"**: Transfer when you can't fully satisfy a request (conservative interpretation)
+2. **Helpfulness**: Explore all options before giving up (generous interpretation)
 
 Both interpretations are reasonable given the current policy wording. The evaluation should either:
-- Make the policy unambiguous about which interpretation is correct, OR
+- Make the policy unambiguous about which interpretation is correct, or
 - Acknowledge both as valid and adjust scoring accordingly
 
 Without this fix, the benchmark systematically penalizes agents for following a valid interpretation of an ambiguous policy.
 
-### "False Success" On Cancelation Denials
+## Issue #2: "False Success" On Cancelation Denials
 
 By investigating tasks which exhibited a mix of agent success and failure (i.e. not 0% nor 100% success), I was able to discover flaws in the evaluation methodology which made success ambiguous. One task showing such mixed outcomes was Task 1. The task setup is as follows:
 
@@ -596,7 +488,7 @@ Testing on 20 trials with `grok-3-mini` revealed:
 While this got reported as a 45% success rate (9 "successes" out of 20), if we removed the "false successes" and considered these as failures, the true success rate would instead only be 5%. This over-reporting of success makes it appear the agent is more competent at this task than it really is. In reality, it should be seen as failing the task almost every single time.
 
 
-#### Why It's a Problem
+### Why It's a Problem
 
 It is perhaps up for debate whether such a case should be considered a successes or failure. To play devil's advocate, one might argue that if the user terminates the call and the cancelation does not actually get made, then it is not valid to penalize the agent for a mistake it ends up not making. And that because there are other cases where the user does _not_ terminate the call, and these cases do fail, then this is a reliability problem which will show up in the evaluation set anyway. However this position is undefensible on two fronts.
 
@@ -608,7 +500,7 @@ The first is pragmatic: detecting reliability issues requires repeated trials, s
 
 Here, we could say the agent violated the policy by (1) failing to recognize the request was against the policy, (2) not denying the user request (in fact it affirmed it), and (3) not initiating a transfer to a human agent. I therefore conclude these cases should be marked as failures. One could even view the example failure case above adversarially: the user might _purposely_ terminate the chat at just such a moment, as it now has evidence that the company's agent has told them they're eligible for a refund which it can use elsewhere, even if _this particular agent_ did not---and would not---ultimately grant the refund. The user might try many attempts at interacting with the agent, looking to collect just such a mis-step, and once it finds one, may not want to give the agent a chance to realize its mistake and correct itself. This would be problematic for the company the agent is representing.
 
-#### Potential Fixes
+### Potential Fixes
 
 I considered three possible fixes:
 
@@ -632,7 +524,7 @@ We could of course prompt the user to not terminate the call or initiate its own
 Given the above concerns, I chose to implement change (1) only as it has the clearest justification, is easiest to implement for the entire evaluation set at once (i.e. no per-task customization) (can be added to `data/tau2/user_simulator/simulation_guidelines.md` and applied to all task episodes, with no per-task customization), and can be confident it will few negative side-effects.
 
 
-#### Implemented Fixes
+### Implemented Fixes
 
 
 **Fix 1: [Strengthened simulated human user](https://github.com/blakeelias/tau2-bench/commit/baca5e92bde9669f8798699c1d3f880d3879fbef)**
@@ -645,11 +537,11 @@ Given the above concerns, I chose to implement change (1) only as it has the cle
 - I don't expect this to change the quantitative results in any significant way. This is just filling in a missing detail that technically made the original policy ambiguous (and maybe would cause some LLMs refuse to make a date comparison if they're hyper-aware of this detail).
 
 
-#### Validation of Fixes
+### Validation of Fixes
 
-[Original performance on 20 trials](data/simulations/2025-10-08T08:49:33.399293_FIX_CANCELATION_EVAL_initial_airline_llm_agent_grok-3_user_simulator_grok-3.json):  average reward 0.45
+[Original performance on 20 trials](../data/simulations/2025-10-08T08:49:33.399293_FIX_CANCELATION_EVAL_initial_airline_llm_agent_grok-3_user_simulator_grok-3.json):  average reward 0.45
 
-[After strengthening human agents](data/simulations/2025-10-08T08:51:56.915936_FIX_CANCELATION_EVAL_improved_user_agent_airline_llm_agent_grok-3_user_simulator_grok-3.json):   average reward 0.25
+[After strengthening human agents](../data/simulations/2025-10-08T08:51:56.915936_FIX_CANCELATION_EVAL_improved_user_agent_airline_llm_agent_grok-3_user_simulator_grok-3.json):   average reward 0.25
 
 
 In the original performance on 20 trials: in 11 cases it granted the cancelation (and is found as a true failure). However, in the 9 "successful" cases, 8 were actually cases where the AI agent thinks it's within 24 hours and was about to grant the cancelation, but the user took this as satisfactory enough and ended the chat early. Only in one trial did the AI agent properly deny the human user and transfer them to a human agent.
