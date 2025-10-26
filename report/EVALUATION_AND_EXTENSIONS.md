@@ -593,7 +593,7 @@ Benchmarks such as [AmbigQA](https://arxiv.org/abs/2004.10645) (Min et al., 2020
 
 #### Grok-4-reasoning-fast failures
 
-##### Example 1: Charged User Wrong Amount
+##### Example 1: Charged User More than Budget
 
 In this instance, the agent (`grok-4-fast-reasoning`) made a mistake by charging more than what the user had said they were willing to pay.
 
@@ -1114,7 +1114,7 @@ Simulation Details:
 
 
 
-##### Example 2:  Overly Pessimistic
+##### Example 2:  Premature Transfer
 
 In this example, the user's initial request would be against policy. However, instead of telling the user that this is against policy and asking if there's anything else they can do, the agent immediately transfers to a human agent. It turns out that the human would have preferred an alternative option in the case where their original request wasn't allowed, and this was expected as the outcome. Here, Grok failed to engage in meaningful dialogue to discover the way it could be most helpful.
 
