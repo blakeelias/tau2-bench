@@ -13,11 +13,11 @@ During evaluation of Grok models on τ-bench, I identified systematic methodolog
 
 The three main issues identified are:
 
-  * **Policy ambiguity in transfer criteria**: The policy semantics around when to execute a transfer to a human agent are ambiguous, and the evaluation unfairly penalizes assistants for acting according to one valid interpretation of the policy.
+  * **Policy ambiguity in transfer criteria**: The policy semantics around when to execute a transfer to a human agent are ambiguous, and the evaluation unfairly penalizes assistants for acting according to a valid interpretation of the policy.
   * **Premature episode termination**: The simulated user's behavior terminates certain episodes prematurely. These episodes were on-track to fail (i.e., the assistant was about to grant a refund that is against the policy), but the user terminated the episode before the agent could confirm and apply these changes, giving the assistant a "free pass" and allowing it to pass evaluation cases that should have failed.
-  * **Non-unique database states**: Some tasks seem to have multiple database states which satisfy the user's request but which differ from the evaluation's desired end-state, causing failures which I believe need not be failures.
+  * **Non-unique database states**: Some tasks seem to have multiple database states which satisfy the user's request but which differ from the evaluation's desired end-state, causing failures which I believe unfairly penalize the agent.
 
-I provide fixes for the first two issues here, resulting in an evaluation that more correctly grades these identified cases. For the third issue I don't provide a fix here, though [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md) implements an extension that addresses this issue.
+I provide fixes for the first two issues here, resulting in a more fair evaluation. I address the third issue in [EVALUATION_AND_EXTENSIONS.md](EVALUATION_AND_EXTENSIONS.md).
 
 ## Issue #1: Policy Ambiguity In Transfer Criteria
 
