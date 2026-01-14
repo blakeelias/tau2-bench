@@ -21,22 +21,16 @@ I provide fixes for the first two issues here, resulting in a more fair evaluati
 
 ## Issue #1: Policy Ambiguity In Transfer Criteria
 
-There is a systematic methodological flaw in the evaluation where **the policy's transfer criteria conflicts with the evaluation expectations**, creating an impossible situation for agents to navigate successfully.
-
-### The Core Issue
+There is a methodological flaw where **the policy's transfer criteria conflicts with the evaluation expectations**, creating an impossible situation for agents to navigate successfully.
 
 The policy states:
 > "You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions."
 
-However, this can be interpreted in two ways:
+A **literal interpretation** is if the user makes a request that cannot be satisfied, and there's nothing else you can do *regarding that specific request*, transfer immediately. However in the traces I viewed, there were cases where the agent was penalized for doing this.
 
-1. **Literal interpretation**: If the user makes a request that cannot be satisfied, and there's nothing else you can do *regarding that specific request*, transfer immediately.
+The evaluation expected different behavior: before transferring, explore whether there are *alternatives/fallbacks* the user would accept (or entirely separate requests the user may have).
 
-2. **Generous interpretation**: Before transferring, explore whether there are *alternative actions* the user might accept, or other *separate tasks* the user might have in mind, that _are_ within policy.
-
-The policy wording supports interpretation #1, but the evaluation expects interpretation #2. Below are examples where the agent's evaluation performance was hurt by this ambiguity.
-
-### Detailed Case Examples
+Below are examples where the agent's evaluation was hurt by this ambiguity.
 
 #### Task 11
 
@@ -50,13 +44,11 @@ The policy wording supports interpretation #1, but the evaluation expects interp
 
 **What Happened**:
 1. User requested removing a passenger
-2. Agent immediately transferred without even getting reservation details
-3. Conversation ended after just 2 agent messages
-4. Evaluation expected: `update_reservation_flights` (downgrade to basic economy)
+2. Agent immediately transferred since requested action is not allowed
+3. Evaluation expected: downgrade to basic economy -- an allowed action (`update_reservation_flights` tool-call)
 
 **The Conflict**:
-- Agent transferred immediately upon hearing an impossible request
-- Agent followed literal policy interpretation
+- Agent followed literal policy: transferred immediately upon hearing an impossible request
 - BUT evaluation expected agent to:
   1. Get reservation details
   2. Explain that removing passengers isn't possible
